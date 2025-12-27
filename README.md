@@ -1,9 +1,5 @@
 # 🤖 AI AGENTS FOR TRADING
 
-<p align="center">
-  <a href="https://www.moondev.com/"><img src="moondev.png" width="300" alt="Moon Dev"></a>
-</p>
-
 ## 🎯 Vision
 ai agents are clearly the future and the entire workforce will be replaced or atleast using ai agents. while i am a quant and building agents for algo trading i will be contributing to all different types of ai agent flows and placing all of the agents here for free, 100% open sourced because i believe code is the great equalizer and we have never seen a regime shift like this so i need to get this code to the people
 
