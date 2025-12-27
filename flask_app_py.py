@@ -13,7 +13,6 @@ from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 from flask_cors import CORS
-from trading_agent import TradingAgent
 
 # ============================================================================
 # SETUP & CONFIGURATION
@@ -317,8 +316,20 @@ def run_trading_agent():
         try:
             add_console_log(f"🔄 Running trading cycle at {datetime.now().strftime('%H:%M:%S')}")
             
-            # Import and run trading agent
-            from trading_agent import TradingAgent
+            # Try multiple import paths
+            try:
+                # Try src.agents.trading_agent first
+                from src.agents.trading_agent import TradingAgent
+            except ImportError:
+                try:
+                    # Try root level trading_agent
+                    from trading_agent import TradingAgent
+                except ImportError:
+                    # Last resort: import from current directory
+                    import sys
+                    sys.path.insert(0, str(BASE_DIR / "src" / "agents"))
+                    from trading_agent import TradingAgent
+            
             agent = TradingAgent()
             agent.run_trading_cycle()
             
@@ -336,12 +347,13 @@ def run_trading_agent():
             error_msg = f"❌ Error in trading cycle: {str(e)}"
             print(error_msg)
             add_console_log(error_msg)
+            import traceback
+            traceback.print_exc()  # This will show full error
             add_console_log("⏳ Retrying in 60 seconds...")
             time.sleep(60)
     
     agent_running = False
     add_console_log("⏹️ Trading agent stopped")
-
 
 # ============================================================================
 # FLASK ROUTES
