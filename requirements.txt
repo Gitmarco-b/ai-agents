@@ -9,7 +9,7 @@ anchorpy
 anchorpy-core
 annotated-types==0.7.0
 anthropic
-anyio==3.7.1
+anyio
 apischema==0.17.5
 appnope==0.1.4
 APScheduler==3.11.0
