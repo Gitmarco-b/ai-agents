@@ -48,7 +48,7 @@ build==1.2.2.post1
 cachetools==4.2.4
 cbpro==1.1.4
 ccxt==4.2.87
-certifi==2025.7.3
+certifi
 cffi==1.16.0
 char==0.1.2
 charset-normalizer==3.3.1
