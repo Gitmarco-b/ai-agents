@@ -42,7 +42,7 @@ bokeh==3.4.0
 borsh-construct==0.1.0
 boto3==1.40.0
 botocore==1.40.0
-Bottleneck==1.5.3
+Bottleneck
 Brotli==1.0.9
 build==1.2.2.post1
 cachetools==4.2.4
