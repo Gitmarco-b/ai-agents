@@ -296,7 +296,7 @@ py-ecc==8.0.0
 py_clob_client==0.23.0
 py_order_utils==0.3.2
 pyaml==24.4.0
-pyarrow==12.0.1
+pyarrow
 pyasn1==0.6.0
 pyasn1_modules==0.4.0
 PyAudio==0.2.14
