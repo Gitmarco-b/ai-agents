@@ -13,7 +13,6 @@ from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 from flask_cors import CORS
-CORS(app)
 
 # ============================================================================
 # SETUP & CONFIGURATION
@@ -33,6 +32,9 @@ app = Flask(__name__,
     static_folder=str(DASHBOARD_DIR / "static"),
     static_url_path='/static'
 )
+
+# Enable CORS
+CORS(app)
 
 # Data storage directories
 DATA_DIR = BASE_DIR / "src" / "data"
