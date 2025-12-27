@@ -46,7 +46,7 @@ Bottleneck
 Brotli
 build==1.2.2.post1
 cachetools==4.2.4
-cbpro==1.1.4
+cbpro
 ccxt==4.2.87
 certifi
 cffi==1.16.0
