@@ -479,10 +479,6 @@ yfinance==0.2.43
 youtube-transcript-api==1.2.3
 yt-dlp==2025.1.26
 zipp==3.19.2
-# Flask web framework
-flask==3.0.3
-werkzeug==3.0.3
-
 # Environment variables
 python-dotenv==1.0.0
 
