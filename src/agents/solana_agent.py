@@ -6,6 +6,11 @@ Analyzes token launches and transactions to find the best opportunities!
 import os
 import sys
 from pathlib import Path
+# Ensure project `src` package is importable when running the script directly
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import pandas as pd
 import time
 import requests

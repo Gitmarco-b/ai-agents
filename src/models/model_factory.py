@@ -8,33 +8,87 @@ This module manages all available AI models and provides a unified interface.
 import os
 from typing import Dict, Optional, Type
 from termcolor import cprint
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except Exception:
+    def load_dotenv(*args, **kwargs):
+        return None
 from pathlib import Path
 from .base_model import BaseModel
-from .claude_model import ClaudeModel
-from .groq_model import GroqModel
-from .openai_model import OpenAIModel
-from .gemini_model import GeminiModel  # Re-enabled with Gemini 2.5 models
-from .deepseek_model import DeepSeekModel
-from .ollama_model import OllamaModel
-from .xai_model import XAIModel
-from .openrouter_model import OpenRouterModel  # 🌙 Moon Dev: OpenRouter - access to 200+ models!
+
+# Try importing optional model adapters; set to None if not available
+ClaudeModel = None
+GroqModel = None
+OpenAIModel = None
+GeminiModel = None
+DeepSeekModel = None
+OllamaModel = None
+XAIModel = None
+OpenRouterModel = None
+
+try:
+    from .claude_model import ClaudeModel
+except Exception as e:
+    cprint(f"⚠️ claude_model not available: {e}", "yellow")
+
+try:
+    from .groq_model import GroqModel
+except Exception as e:
+    cprint(f"⚠️ groq_model not available: {e}", "yellow")
+
+try:
+    from .openai_model import OpenAIModel
+except Exception as e:
+    cprint(f"⚠️ openai_model not available: {e}", "yellow")
+
+try:
+    from .gemini_model import GeminiModel
+except Exception as e:
+    cprint(f"⚠️ gemini_model not available: {e}", "yellow")
+
+try:
+    from .deepseek_model import DeepSeekModel
+except Exception as e:
+    cprint(f"⚠️ deepseek_model not available: {e}", "yellow")
+
+try:
+    from .ollama_model import OllamaModel
+except Exception as e:
+    cprint(f"⚠️ ollama_model not available: {e}", "yellow")
+
+try:
+    from .xai_model import XAIModel
+except Exception as e:
+    cprint(f"⚠️ xai_model not available: {e}", "yellow")
+
+try:
+    from .openrouter_model import OpenRouterModel
+except Exception as e:
+    cprint(f"⚠️ openrouter_model not available: {e}", "yellow")
 import random
 
 class ModelFactory:
     """Factory for creating and managing AI models"""
     
     # Map model types to their implementations
-    MODEL_IMPLEMENTATIONS = {
-        "claude": ClaudeModel,
-        "groq": GroqModel,
-        "openai": OpenAIModel,
-        "gemini": GeminiModel,  # Re-enabled with Gemini 2.5 models
-        "deepseek": DeepSeekModel,
-        "ollama": OllamaModel,  # Add Ollama implementation
-        "xai": XAIModel,  # xAI Grok models
-        "openrouter": OpenRouterModel  # 🌙 Moon Dev: OpenRouter - 200+ models!
-    }
+    # Build the implementations mapping only with adapters that are actually imported
+    MODEL_IMPLEMENTATIONS = {}
+    if ClaudeModel is not None:
+        MODEL_IMPLEMENTATIONS["claude"] = ClaudeModel
+    if GroqModel is not None:
+        MODEL_IMPLEMENTATIONS["groq"] = GroqModel
+    if OpenAIModel is not None:
+        MODEL_IMPLEMENTATIONS["openai"] = OpenAIModel
+    if GeminiModel is not None:
+        MODEL_IMPLEMENTATIONS["gemini"] = GeminiModel
+    if DeepSeekModel is not None:
+        MODEL_IMPLEMENTATIONS["deepseek"] = DeepSeekModel
+    if OllamaModel is not None:
+        MODEL_IMPLEMENTATIONS["ollama"] = OllamaModel
+    if XAIModel is not None:
+        MODEL_IMPLEMENTATIONS["xai"] = XAIModel
+    if OpenRouterModel is not None:
+        MODEL_IMPLEMENTATIONS["openrouter"] = OpenRouterModel
     
     # Default models for each type
     DEFAULT_MODELS = {
@@ -49,10 +103,13 @@ class ModelFactory:
     }
     
     def __init__(self):
-        # Load environment variables
+        # Load environment variables (noop if python-dotenv not installed)
         project_root = Path(__file__).parent.parent.parent
         env_path = project_root / '.env'
-        load_dotenv(dotenv_path=env_path)
+        try:
+            load_dotenv(dotenv_path=env_path)
+        except Exception:
+            pass
 
         self._models: Dict[str, BaseModel] = {}
         self._initialize_models()

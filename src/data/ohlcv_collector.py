@@ -5,14 +5,23 @@ Built with love by Moon Dev 🚀
 """
 
 from src.config import *
-from src import nice_funcs as n
-from src import nice_funcs_hyperliquid as hl
-from src import nice_funcs_aster as aster
-import pandas as pd
-from datetime import datetime
+try:
+    from termcolor import colored, cprint
+except Exception:
+    def cprint(msg, *args, **kwargs):
+        print(msg)
+    def colored(msg, *args, **kwargs):
+        return msg
+
 import os
-from termcolor import colored, cprint
 import time
+from datetime import datetime
+from pathlib import Path
+
+try:
+    import pandas as pd
+except Exception:
+    pd = None
 
 def collect_token_data(token, days_back=DAYSBACK_4_DATA, timeframe=DATA_TIMEFRAME, exchange="SOLANA"):
     """Collect OHLCV data for a single token
@@ -44,10 +53,32 @@ def collect_token_data(token, days_back=DAYSBACK_4_DATA, timeframe=DATA_TIMEFRAM
             cprint(f"🔄 Converting timeframe: {timeframe} → {hl_timeframe} (for HyperLiquid)", "yellow")
 
         # Route to appropriate data source based on exchange
+        bars_per_day = {
+            '1m': 1440, '3m': 480, '5m': 288, '15m': 96, '30m': 48,
+            '1H': 24, '2H': 12, '4H': 6, '6H': 4, '8H': 3, '12H': 2,
+            '1h': 24, '2h': 12, '4h': 6, '6h': 4, '8h': 3, '12h': 2,  # lowercase versions
+            '1D': 1, '3D': 1/3, '1W': 1/7, '1M': 1/30,
+            '1d': 1, '3d': 1/3, '1w': 1/7, '1month': 1/30  # lowercase versions
+        }
+
+        bars_needed = int(days_back * bars_per_day.get(timeframe, 24))  # Default to hourly if unknown
+        cprint(f"📊 Calculating bars: {days_back} days × {timeframe} = {bars_needed} bars", "cyan")
+
+        # Convert timeframe to HyperLiquid format (lowercase h for hours)
+        hl_timeframe = timeframe.replace('H', 'h').replace('D', 'd').replace('W', 'w').replace('M', 'month')
+        if hl_timeframe != timeframe:
+            cprint(f"🔄 Converting timeframe: {timeframe} → {hl_timeframe} (for HyperLiquid)", "yellow")
+
+        # Route to appropriate data source based on exchange
         if exchange == "HYPERLIQUID":
             # Use HyperLiquid API
             cprint(f"🏦 Using HyperLiquid API for {token}", "cyan")
-            data = hl.get_data(symbol=token, timeframe=hl_timeframe, bars=bars_needed, add_indicators=True)
+            try:
+                from src import nice_funcs_hyperliquid as hl
+                data = hl.get_data(symbol=token, timeframe=hl_timeframe, bars=bars_needed, add_indicators=True)
+            except Exception as e:
+                cprint(f"⚠️ Hyperliquid helper unavailable: {e}", "yellow")
+                return None
         elif exchange == "ASTER":
             # Use HyperLiquid API for Aster symbols too (same symbols, same data)
             cprint(f"🏦 Using HyperLiquid API for {token} (Aster symbols)", "cyan")
@@ -59,9 +90,32 @@ def collect_token_data(token, days_back=DAYSBACK_4_DATA, timeframe=DATA_TIMEFRAM
         else:
             # Default: Use Solana/Birdeye API
             cprint(f"🏦 Using Solana/Birdeye API for {token}", "cyan")
-            data = n.get_data(token, days_back, timeframe)
+            try:
+                from src import nice_funcs as n
+                data = n.get_data(token, days_back, timeframe)
+            except Exception as e:
+                cprint(f"⚠️ Solana helper unavailable: {e}", "yellow")
+                return None
 
-        if data is None or data.empty:
+        is_empty = False
+        if data is None:
+            is_empty = True
+        else:
+            if pd is not None:
+                try:
+                    if hasattr(data, 'empty') and data.empty:
+                        is_empty = True
+                except Exception:
+                    pass
+            else:
+                # Fallback: check length
+                try:
+                    if len(data) == 0:
+                        is_empty = True
+                except Exception:
+                    is_empty = False
+
+        if is_empty:
             cprint(f"❌ Moon Dev's AI Agent couldn't fetch data for {token}", "white", "on_red")
             return None
 
@@ -76,8 +130,12 @@ def collect_token_data(token, days_back=DAYSBACK_4_DATA, timeframe=DATA_TIMEFRAM
         # Ensure directory exists
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         
-        # Save to CSV
-        data.to_csv(save_path)
+        # Save to CSV (if supported)
+        try:
+            if hasattr(data, 'to_csv'):
+                data.to_csv(save_path)
+        except Exception:
+            cprint(f"⚠️ Failed to save data to CSV for {token}", "yellow")
         cprint(f"💾 Moon Dev's AI Agent cached data for {token[:4]}", "white", "on_green")
         
         return data

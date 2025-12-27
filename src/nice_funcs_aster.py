@@ -1,21 +1,10 @@
 """
-🌙 Moon Dev's Aster DEX Functions
+🌙 Moon Dev's Aster DEX Functions (fixed)
 Built with love by Moon Dev 🚀
 
-Aster-specific trading functions for futures trading.
-Supports both LONG and SHORT positions.
-
-LEVERAGE & POSITION SIZING:
-- All 'amount' parameters represent NOTIONAL position size (total exposure)
-- Leverage is applied by the exchange, reducing required margin
-- Example: $25 position at 5x leverage = $25 notional, $5 margin required
-- Formula: Required Margin = Notional Position / Leverage
-- Default leverage: 5x (configurable below)
-
-QUANTITY CALCULATION:
-- quantity = notional_position_size / current_price
-- This gives the amount of tokens for the desired exposure
-- The exchange handles margin requirements automatically
+Notes:
+- This version normalizes API responses (tuple/dict) so `.get()` won't raise
+  "'tuple' object has no attribute 'get'".
 """
 
 import os
@@ -30,47 +19,127 @@ if aster_bots_path not in sys.path:
     sys.path.insert(0, aster_bots_path)
 
 # Try importing Aster modules
+ASTER_AVAILABLE = True
 try:
     from aster_api import AsterAPI  # type: ignore
     from aster_funcs import AsterFuncs  # type: ignore
 except ImportError as e:
-    cprint(f"❌ Failed to import Aster modules: {e}", "red")
-    cprint(f"Make sure Aster-Dex-Trading-Bots exists at: {aster_bots_path}", "yellow")
-    sys.exit(1)
+    cprint(f"⚠️ Aster modules not available: {e}", "yellow")
+    cprint(f"Skipping Aster functionality. Make sure Aster-Dex-Trading-Bots exists at: {aster_bots_path}", "yellow")
+    ASTER_AVAILABLE = False
 
-# Load environment variables
-load_dotenv()
+if ASTER_AVAILABLE:
+    # Load environment variables
+    load_dotenv()
 
-# Get API keys
-ASTER_API_KEY = os.getenv('ASTER_API_KEY')
-ASTER_API_SECRET = os.getenv('ASTER_API_SECRET')
+    # Get API keys
+    ASTER_API_KEY = os.getenv('ASTER_API_KEY')
+    ASTER_API_SECRET = os.getenv('ASTER_API_SECRET')
 
-# Verify API keys
-if not ASTER_API_KEY or not ASTER_API_SECRET:
-    cprint("❌ ASTER API keys not found in .env file!", "red")
-    cprint("Please add ASTER_API_KEY and ASTER_API_SECRET to your .env file", "yellow")
-    sys.exit(1)
-
-# Initialize API (global instance)
-api = AsterAPI(ASTER_API_KEY, ASTER_API_SECRET)
-funcs = AsterFuncs(api)
+    # Verify API keys
+    if not ASTER_API_KEY or not ASTER_API_SECRET:
+        cprint("❌ ASTER API keys not found in .env file!", "red")
+        cprint("Please add ASTER_API_KEY and ASTER_API_SECRET to your .env file", "yellow")
+        ASTER_AVAILABLE = False
+    else:
+        # Initialize API (global instance)
+        api = AsterAPI(ASTER_API_KEY, ASTER_API_SECRET)
+        funcs = AsterFuncs(api)
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 DEFAULT_LEVERAGE = 5  # Change this to adjust leverage globally (1-125x)
-                      # Higher leverage = less margin required, but higher liquidation risk
-                      # Examples:
-                      # - 5x: $25 position needs $5 margin
-                      # - 10x: $25 position needs $2.50 margin
-                      # - 20x: $25 position needs $1.25 margin
-
 DEFAULT_SYMBOL_SUFFIX = 'USDT'  # Aster uses BTCUSDT, ETHUSDT, etc.
 
 # Precision cache
 SYMBOL_PRECISION_CACHE = {}
 
+# -------------------------
+# Response normalization
+# -------------------------
+def normalize_response(resp, kind=None):
+    """
+    Convert various API return shapes into a dictionary form used by this script.
 
+    Heuristics:
+    - If resp already a dict -> return as is.
+    - If resp is a list/tuple and contains at least one dict -> return the first dict.
+    - If resp is a list/tuple and no dict is inside -> attempt to map common
+      structures for known kinds (order, position, account, orderbook, exchange_info).
+    - Otherwise return empty dict.
+    """
+    # Already a dict (common)
+    if isinstance(resp, dict):
+        return resp
+
+    # If tuple/list, try to find a dict inside
+    if isinstance(resp, (list, tuple)):
+        for item in resp:
+            if isinstance(item, dict):
+                return item
+
+        # Heuristics by kind
+        if kind == 'order':
+            return {
+                'orderId': resp[0] if len(resp) > 0 else None,
+                'status': resp[1] if len(resp) > 1 else None,
+                'filled_qty': resp[2] if len(resp) > 2 else None
+            }
+        if kind == 'position':
+            # expected (position_amount, entry_price, mark_price, pnl, pnl_percentage, is_long)
+            return {
+                'position_amount': float(resp[0]) if len(resp) > 0 else 0.0,
+                'entry_price': float(resp[1]) if len(resp) > 1 else 0.0,
+                'mark_price': float(resp[2]) if len(resp) > 2 else 0.0,
+                'pnl': float(resp[3]) if len(resp) > 3 else 0.0,
+                'pnl_percentage': float(resp[4]) if len(resp) > 4 else 0.0,
+                'is_long': bool(resp[5]) if len(resp) > 5 else (float(resp[0]) > 0 if len(resp) > 0 else False)
+            }
+        if kind == 'account':
+            return {
+                'availableBalance': float(resp[0]) if len(resp) > 0 else 0.0,
+                'totalPositionInitialMargin': float(resp[1]) if len(resp) > 1 else 0.0,
+                'totalUnrealizedProfit': float(resp[2]) if len(resp) > 2 else 0.0
+            }
+        if kind == 'orderbook':
+            # assume (bids, asks) or similar
+            bids = resp[0] if len(resp) > 0 else []
+            asks = resp[1] if len(resp) > 1 else []
+            # if inner elements are strings/tuples, return as-is
+            return {'bids': bids, 'asks': asks}
+        if kind == 'exchange_info':
+            # If first element is dict, return that, else default
+            if len(resp) > 0 and isinstance(resp[0], dict):
+                return resp[0]
+            return {'symbols': []}
+
+    # Fallback
+    return {}
+
+# Convenience wrapper specifically for orders
+def normalize_order(order):
+    return normalize_response(order, kind='order')
+
+# Convenience wrapper for positions
+def normalize_position(position):
+    return normalize_response(position, kind='position')
+
+# Convenience wrapper for account info
+def normalize_account(account_info):
+    return normalize_response(account_info, kind='account')
+
+# Convenience wrapper for orderbook
+def normalize_orderbook(orderbook):
+    return normalize_response(orderbook, kind='orderbook')
+
+# Convenience wrapper for exchange info
+def normalize_exchange_info(exchange_info):
+    return normalize_response(exchange_info, kind='exchange_info')
+
+# ============================================================================
+# Utilities
+# ============================================================================
 def get_symbol_precision(symbol):
     """Get price and quantity precision for a symbol
 
@@ -81,19 +150,20 @@ def get_symbol_precision(symbol):
         return SYMBOL_PRECISION_CACHE[symbol]
 
     try:
-        exchange_info = api.get_exchange_info()
+        exchange_info_raw = api.get_exchange_info()
+        exchange_info = normalize_exchange_info(exchange_info_raw)
 
         for sym_info in exchange_info.get('symbols', []):
-            if sym_info['symbol'] == symbol:
+            if sym_info.get('symbol') == symbol:
                 price_precision = 2
                 quantity_precision = 3
 
                 for filter_info in sym_info.get('filters', []):
-                    if filter_info['filterType'] == 'PRICE_FILTER':
+                    if filter_info.get('filterType') == 'PRICE_FILTER':
                         tick_size = filter_info.get('tickSize', '0.01')
                         price_precision = len(tick_size.rstrip('0').split('.')[-1]) if '.' in tick_size else 0
 
-                    if filter_info['filterType'] == 'LOT_SIZE':
+                    if filter_info.get('filterType') == 'LOT_SIZE':
                         step_size = filter_info.get('stepSize', '0.001')
                         quantity_precision = len(step_size.rstrip('0').split('.')[-1]) if '.' in step_size else 0
 
@@ -108,48 +178,52 @@ def get_symbol_precision(symbol):
         cprint(f"❌ Error getting precision: {e}", "red")
         return 2, 3
 
-
 def format_symbol(token):
-    """Convert token address/symbol to Aster format
-
-    For now, assumes token is already in correct format (BTCUSDT, ETHUSDT, etc.)
-    Future: Could map token addresses to symbols
-    """
+    """Convert token address/symbol to Aster format"""
     if not token.endswith(DEFAULT_SYMBOL_SUFFIX):
         return f"{token}{DEFAULT_SYMBOL_SUFFIX}"
     return token
 
-
 def token_price(address):
-    """Get current token price from bid/ask midpoint
-
-    Args:
-        address: Token symbol (e.g., 'BTCUSDT')
-
-    Returns:
-        float: Current price
-    """
+    """Get current token price from bid/ask midpoint"""
     try:
         symbol = format_symbol(address)
-        ask, bid, _ = api.get_ask_bid(symbol)
-        midpoint = (ask + bid) / 2
+        # api.get_ask_bid might return a tuple (ask, bid, something) or a dict
+        res = api.get_ask_bid(symbol)
+
+        ask = bid = 0.0
+
+        if isinstance(res, (list, tuple)):
+            # try standard unpack
+            try:
+                ask, bid, _ = res
+            except Exception:
+                # fallback: try to find dict inside
+                res2 = normalize_response(res)
+                ask = float(res2.get('ask', 0) or 0)
+                bid = float(res2.get('bid', 0) or 0)
+        elif isinstance(res, dict):
+            ask = float(res.get('ask', 0) or 0)
+            bid = float(res.get('bid', 0) or 0)
+        else:
+            res2 = normalize_response(res)
+            ask = float(res2.get('ask', 0) or 0)
+            bid = float(res2.get('bid', 0) or 0)
+
+        if ask == 0 or bid == 0:
+            return 0.0
+
+        midpoint = (float(ask) + float(bid)) / 2
         return midpoint
     except Exception as e:
         cprint(f"❌ Error getting price for {address}: {e}", "red")
-        return 0
-
+        return 0.0
 
 def get_best_bid_ask(symbol):
-    """Get best bid and ask prices from order book
-
-    Returns:
-        tuple: (best_bid, best_ask) or (None, None) if error
-    """
+    """Get best bid and ask prices from order book"""
     try:
-        orderbook = api.get_orderbook(symbol, limit=5)
-
-        if not orderbook:
-            return None, None
+        orderbook_raw = api.get_orderbook(symbol, limit=5)
+        orderbook = normalize_orderbook(orderbook_raw)
 
         bids = orderbook.get('bids', [])
         asks = orderbook.get('asks', [])
@@ -157,8 +231,16 @@ def get_best_bid_ask(symbol):
         if not bids or not asks:
             return None, None
 
-        best_bid = float(bids[0][0])  # First bid price
-        best_ask = float(asks[0][0])  # First ask price
+        # bids/asks might be lists of [price, qty] tuples or strings
+        try:
+            best_bid = float(bids[0][0])
+        except Exception:
+            best_bid = float(bids[0]) if bids else None
+
+        try:
+            best_ask = float(asks[0][0])
+        except Exception:
+            best_ask = float(asks[0]) if asks else None
 
         return best_bid, best_ask
 
@@ -166,21 +248,8 @@ def get_best_bid_ask(symbol):
         cprint(f"❌ Error getting order book for {symbol}: {e}", "red")
         return None, None
 
-
 def place_limit_order_with_chase(symbol, side, quantity, leverage, max_attempts=20, check_interval=0.5):
-    """Place limit order at best bid/ask and chase until filled
-
-    Args:
-        symbol: Token symbol (e.g., 'BTCUSDT')
-        side: 'BUY' or 'SELL'
-        quantity: Order quantity
-        leverage: Leverage to use
-        max_attempts: Maximum number of attempts to chase the order (default: 20)
-        check_interval: Seconds to wait between checks (default: 0.5)
-
-    Returns:
-        dict: Final filled order info or None if failed
-    """
+    """Place limit order at best bid/ask and chase until filled"""
     try:
         # Set leverage first
         api.change_leverage(symbol, leverage)
@@ -194,12 +263,11 @@ def place_limit_order_with_chase(symbol, side, quantity, leverage, max_attempts=
 
             # Get best bid/ask
             best_bid, best_ask = get_best_bid_ask(symbol)
-            if not best_bid or not best_ask:
+            if best_bid is None or best_ask is None:
                 cprint(f"❌ Could not get order book", "red")
                 time.sleep(check_interval)
                 continue
 
-            # Determine target price (bid for buy, ask for sell)
             target_price = best_bid if side == 'BUY' else best_ask
 
             # Round price to proper precision
@@ -208,8 +276,8 @@ def place_limit_order_with_chase(symbol, side, quantity, leverage, max_attempts=
 
             # If we have an existing order and price hasn't changed, check status
             if current_order_id and target_price == last_price:
-                # Check if order is filled
-                order_status = api.get_order(symbol, order_id=current_order_id)
+                order_status_raw = api.get_order(symbol, order_id=current_order_id)
+                order_status = normalize_order(order_status_raw)
                 status = order_status.get('status', '')
 
                 if status == 'FILLED':
@@ -233,7 +301,7 @@ def place_limit_order_with_chase(symbol, side, quantity, leverage, max_attempts=
 
             # Place new limit order at best bid/ask
             cprint(f"📝 Placing LIMIT {side}: {quantity} {symbol} @ ${target_price:.2f}", "cyan")
-            order = api.place_order(
+            order_raw = api.place_order(
                 symbol=symbol,
                 side=side,
                 order_type='LIMIT',
@@ -242,6 +310,7 @@ def place_limit_order_with_chase(symbol, side, quantity, leverage, max_attempts=
                 time_in_force='GTC'
             )
 
+            order = normalize_order(order_raw)
             current_order_id = order.get('orderId')
             last_price = target_price
             cprint(f"   Order placed: ID {current_order_id}", "cyan")
@@ -253,7 +322,7 @@ def place_limit_order_with_chase(symbol, side, quantity, leverage, max_attempts=
             cprint(f"⚠️  Max attempts reached, cancelling order {current_order_id}", "yellow")
             try:
                 api.cancel_order(symbol, order_id=current_order_id)
-            except:
+            except Exception:
                 pass
 
         return None
@@ -262,71 +331,34 @@ def place_limit_order_with_chase(symbol, side, quantity, leverage, max_attempts=
         cprint(f"❌ Error in limit order chase: {e}", "red")
         return None
 
-
 def get_position(token_mint_address):
-    """Get current position for a token
-
-    Args:
-        token_mint_address: Token symbol (e.g., 'BTCUSDT')
-
-    Returns:
-        dict: Position info or None if no position
-            {
-                'position_amount': float,  # Positive for long, negative for short
-                'entry_price': float,
-                'mark_price': float,
-                'pnl': float,
-                'pnl_percentage': float,
-                'is_long': bool
-            }
-    """
+    """Get current position for a token"""
     try:
         symbol = format_symbol(token_mint_address)
-        position = api.get_position(symbol)
+        position_raw = api.get_position(symbol)
+        position = normalize_position(position_raw)
         return position
     except Exception as e:
         cprint(f"❌ Error getting position for {token_mint_address}: {e}", "red")
         return None
 
-
 def get_token_balance_usd(token_mint_address):
-    """Get USD value of current position
-
-    Args:
-        token_mint_address: Token symbol (e.g., 'BTCUSDT')
-
-    Returns:
-        float: USD value of position (absolute value)
-    """
+    """Get USD value of current position"""
     try:
         position = get_position(token_mint_address)
         if not position:
-            return 0
+            return 0.0
 
-        position_amt = position.get('position_amount', 0)
-        mark_price = position.get('mark_price', 0)
+        position_amt = float(position.get('position_amount', 0) or 0)
+        mark_price = float(position.get('mark_price', 0) or 0)
 
-        # Return absolute USD value
         return abs(position_amt * mark_price)
-
     except Exception as e:
         cprint(f"❌ Error getting balance for {token_mint_address}: {e}", "red")
-        return 0
-
+        return 0.0
 
 def market_buy(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
-    """Open or add to LONG position with MARKET order (immediate fill)
-
-    Args:
-        token: Token symbol (e.g., 'BTCUSDT')
-        amount: USD NOTIONAL position size (total exposure, not margin)
-                Example: $25 at 5x leverage = $25 position, $5 margin required
-        slippage: Slippage tolerance (not used for market orders on Aster)
-        leverage: Leverage multiplier (default: 5)
-
-    Returns:
-        dict: Order response or None if failed
-    """
+    """Open or add to LONG position with MARKET order (immediate fill)"""
     try:
         symbol = format_symbol(token)
 
@@ -365,12 +397,13 @@ def market_buy(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
         cprint(f"💰 Notional Position: ${amount:.2f} | Margin Required: ${required_margin:.2f} ({leverage}x)", "cyan")
 
         # Place market buy order
-        order = api.place_order(
+        order_raw = api.place_order(
             symbol=symbol,
             side='BUY',
             order_type='MARKET',
             quantity=quantity
         )
+        order = normalize_order(order_raw)
 
         cprint(f"✅ Market buy order placed! Order ID: {order.get('orderId')}", "green")
         return order
@@ -379,20 +412,8 @@ def market_buy(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
         cprint(f"❌ Error placing market buy: {e}", "red")
         return None
 
-
 def limit_buy(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
-    """Open or add to LONG position with LIMIT order at best bid (chase until filled)
-
-    Args:
-        token: Token symbol (e.g., 'BTCUSDT')
-        amount: USD NOTIONAL position size (total exposure, not margin)
-                Example: $25 at 5x leverage = $25 position, $5 margin required
-        slippage: Slippage tolerance (not used - we chase the bid)
-        leverage: Leverage multiplier (default: 5)
-
-    Returns:
-        dict: Order response or None if failed
-    """
+    """Open or add to LONG position with LIMIT order at best bid (chase until filled)"""
     try:
         symbol = format_symbol(token)
 
@@ -446,19 +467,8 @@ def limit_buy(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
         cprint(f"❌ Error placing limit buy: {e}", "red")
         return None
 
-
 def market_sell(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
-    """Close LONG or open SHORT position with MARKET order (immediate fill)
-
-    Args:
-        token: Token symbol (e.g., 'BTCUSDT')
-        amount: USD NOTIONAL amount (total exposure, not margin)
-        slippage: Slippage tolerance (not used for market orders on Aster)
-        leverage: Leverage multiplier (default: 5)
-
-    Returns:
-        dict: Order response or None if failed
-    """
+    """Close LONG or open SHORT position with MARKET order (immediate fill)"""
     try:
         symbol = format_symbol(token)
 
@@ -478,18 +488,19 @@ def market_sell(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
         _, quantity_precision = get_symbol_precision(symbol)
         quantity = round(quantity, quantity_precision)
 
-        if position and position['position_amount'] > 0:
+        if position and float(position.get('position_amount', 0)) > 0:
             # We have a long position - close it (reduce_only)
             cprint(f"📉 Closing LONG: {quantity} {symbol} @ MARKET", "red")
             cprint(f"💰 Closing ${amount:.2f} notional position", "cyan")
 
-            order = api.place_order(
+            order_raw = api.place_order(
                 symbol=symbol,
                 side='SELL',
                 order_type='MARKET',
                 quantity=quantity,
                 reduce_only=True
             )
+            order = normalize_order(order_raw)
 
             cprint(f"✅ Market sell order placed! Order ID: {order.get('orderId')}", "green")
             return order
@@ -513,12 +524,13 @@ def market_sell(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
             cprint(f"📉 MARKET SELL (SHORT): {quantity} {symbol} @ ~${current_price:.2f}", "red")
             cprint(f"💰 Notional Position: ${amount:.2f} | Margin Required: ${required_margin:.2f} ({leverage}x)", "cyan")
 
-            order = api.place_order(
+            order_raw = api.place_order(
                 symbol=symbol,
                 side='SELL',
                 order_type='MARKET',
                 quantity=quantity
             )
+            order = normalize_order(order_raw)
 
             cprint(f"✅ Market sell order placed! Order ID: {order.get('orderId')}", "green")
             return order
@@ -527,19 +539,8 @@ def market_sell(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
         cprint(f"❌ Error placing market sell: {e}", "red")
         return None
 
-
 def limit_sell(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
-    """Close LONG or open SHORT position with LIMIT order at best ask (chase until filled)
-
-    Args:
-        token: Token symbol (e.g., 'BTCUSDT')
-        amount: USD NOTIONAL amount (total exposure, not margin)
-        slippage: Slippage tolerance (not used - we chase the ask)
-        leverage: Leverage multiplier (default: 5)
-
-    Returns:
-        dict: Order response or None if failed
-    """
+    """Close LONG or open SHORT position with LIMIT order at best ask (chase until filled)"""
     try:
         symbol = format_symbol(token)
 
@@ -559,19 +560,20 @@ def limit_sell(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
         _, quantity_precision = get_symbol_precision(symbol)
         quantity = round(quantity, quantity_precision)
 
-        if position and position['position_amount'] > 0:
+        if position and float(position.get('position_amount', 0)) > 0:
             # We have a long position - close it (reduce_only)
             # Use market order for immediate exit when closing
             cprint(f"📉 Closing LONG: {quantity} {symbol} @ MARKET (immediate exit)", "red")
             cprint(f"💰 Closing ${amount:.2f} notional position", "cyan")
 
-            order = api.place_order(
+            order_raw = api.place_order(
                 symbol=symbol,
                 side='SELL',
                 order_type='MARKET',
                 quantity=quantity,
                 reduce_only=True
             )
+            order = normalize_order(order_raw)
 
             cprint(f"✅ Market sell order placed! Order ID: {order.get('orderId')}", "green")
             return order
@@ -612,18 +614,8 @@ def limit_sell(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
         cprint(f"❌ Error placing limit sell: {e}", "red")
         return None
 
-
 def chunk_kill(token_mint_address, max_usd_order_size, slippage):
-    """Close entire position in chunks
-
-    Args:
-        token_mint_address: Token symbol (e.g., 'BTCUSDT')
-        max_usd_order_size: Maximum USD per chunk
-        slippage: Slippage tolerance
-
-    Returns:
-        bool: True if successful
-    """
+    """Close entire position in chunks"""
     try:
         symbol = format_symbol(token_mint_address)
         position = get_position(token_mint_address)
@@ -632,8 +624,8 @@ def chunk_kill(token_mint_address, max_usd_order_size, slippage):
             cprint(f"⚠️  No position to close for {symbol}", "yellow")
             return True
 
-        position_amt = position['position_amount']
-        is_long = position['is_long']
+        position_amt = float(position.get('position_amount', 0) or 0)
+        is_long = bool(position.get('is_long', position_amt > 0))
 
         cprint(f"🔄 Closing position: {position_amt} {symbol} ({'LONG' if is_long else 'SHORT'})", "cyan")
 
@@ -641,7 +633,7 @@ def chunk_kill(token_mint_address, max_usd_order_size, slippage):
         close_side = 'SELL' if is_long else 'BUY'
 
         # Get total position value
-        total_value = abs(position_amt * position['mark_price'])
+        total_value = abs(position_amt * float(position.get('mark_price', 0) or 0))
 
         # Calculate number of chunks needed
         num_chunks = int(total_value / max_usd_order_size) + 1
@@ -656,57 +648,45 @@ def chunk_kill(token_mint_address, max_usd_order_size, slippage):
         for i in range(num_chunks):
             # Check remaining position
             current_position = get_position(token_mint_address)
-            if not current_position or abs(current_position['position_amount']) < 0.0001:
+            if not current_position or abs(float(current_position.get('position_amount', 0) or 0)) < 0.0001:
                 cprint(f"✅ Position fully closed after {i} chunks!", "green")
                 break
 
             # Calculate chunk size (use remaining position for last chunk)
-            remaining = abs(current_position['position_amount'])
+            remaining = abs(float(current_position.get('position_amount', 0) or 0))
             chunk = min(chunk_size_tokens, remaining)
             chunk = round(chunk, quantity_precision)
 
             cprint(f"🔄 Chunk {i+1}/{num_chunks}: Closing {chunk} {symbol}", "cyan")
 
             # Place market order to close chunk
-            order = api.place_order(
+            order_raw = api.place_order(
                 symbol=symbol,
                 side=close_side,
                 order_type='MARKET',
                 quantity=chunk,
                 reduce_only=True
             )
+            order = normalize_order(order_raw)
 
             cprint(f"✅ Chunk order placed! Order ID: {order.get('orderId')}", "green")
             time.sleep(1)  # Small delay between chunks
 
         # Verify position closed
         final_position = get_position(token_mint_address)
-        if not final_position or abs(final_position['position_amount']) < 0.0001:
+        if not final_position or abs(float(final_position.get('position_amount', 0) or 0)) < 0.0001:
             cprint(f"✅ Position closed successfully!", "green", attrs=['bold'])
             return True
         else:
-            cprint(f"⚠️  Position still has {final_position['position_amount']} remaining", "yellow")
+            cprint(f"⚠️  Position still has {final_position.get('position_amount')} remaining", "yellow")
             return False
 
     except Exception as e:
         cprint(f"❌ Error in chunk_kill: {e}", "red")
         return False
 
-
 def ai_entry(symbol, amount, max_chunk_size=None, leverage=DEFAULT_LEVERAGE, use_limit=True):
-    """Smart entry with automatic chunking
-
-    Args:
-        symbol: Token symbol (e.g., 'BTCUSDT')
-        amount: Total USD amount to invest
-        max_chunk_size: Maximum USD per order (default: use full amount)
-        leverage: Leverage multiplier (default: 5)
-        use_limit: If True, use limit orders with chase (default: True)
-                   If False, use market orders for immediate fill
-
-    Returns:
-        bool: True if successful
-    """
+    """Smart entry with automatic chunking"""
     try:
         symbol = format_symbol(symbol)
 
@@ -746,20 +726,8 @@ def ai_entry(symbol, amount, max_chunk_size=None, leverage=DEFAULT_LEVERAGE, use
         cprint(f"❌ Error in ai_entry: {e}", "red")
         return False
 
-
 def open_short(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
-    """Open SHORT position explicitly
-
-    Args:
-        token: Token symbol (e.g., 'BTCUSDT')
-        amount: USD NOTIONAL position size (total exposure, not margin)
-                Example: $25 short at 5x leverage = $25 position, $5 margin required
-        slippage: Slippage tolerance
-        leverage: Leverage multiplier
-
-    Returns:
-        dict: Order response
-    """
+    """Open SHORT position explicitly"""
     try:
         symbol = format_symbol(token)
 
@@ -787,12 +755,13 @@ def open_short(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
         cprint(f"💰 Notional Position: ${amount:.2f} | Margin Required: ${required_margin:.2f} ({leverage}x)", "cyan")
 
         # Place market sell order to open short
-        order = api.place_order(
+        order_raw = api.place_order(
             symbol=symbol,
             side='SELL',
             order_type='MARKET',
             quantity=quantity
         )
+        order = normalize_order(order_raw)
 
         cprint(f"✅ Short position opened! Order ID: {order.get('orderId')}", "green")
         return order
@@ -801,25 +770,15 @@ def open_short(token, amount, slippage, leverage=DEFAULT_LEVERAGE):
         cprint(f"❌ Error opening short: {e}", "red")
         return None
 
-
 def get_account_balance():
-    """Get account balance information
-
-    Returns:
-        dict: Account balance info
-            {
-                'available': float,
-                'total_equity': float,
-                'position_margin': float,
-                'unrealized_pnl': float
-            }
-    """
+    """Get account balance information"""
     try:
-        account_info = api.get_account_info()
+        account_info_raw = api.get_account_info()
+        account_info = normalize_account(account_info_raw)
 
-        available = float(account_info.get('availableBalance', 0))
-        position_margin = float(account_info.get('totalPositionInitialMargin', 0))
-        unrealized_profit = float(account_info.get('totalUnrealizedProfit', 0))
+        available = float(account_info.get('availableBalance', 0) or 0)
+        position_margin = float(account_info.get('totalPositionInitialMargin', 0) or 0)
+        unrealized_profit = float(account_info.get('totalUnrealizedProfit', 0) or 0)
         total_equity = available + position_margin + unrealized_profit
 
         return {
@@ -832,6 +791,5 @@ def get_account_balance():
         cprint(f"❌ Error getting account balance: {e}", "red")
         return None
 
-
 # Initialize on import
-cprint("✨ Aster DEX functions loaded successfully!", "green")
+cprint("✨ Aster DEX functions loaded successfully (normalized)!", "green")
