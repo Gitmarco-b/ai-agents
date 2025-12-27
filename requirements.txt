@@ -138,7 +138,7 @@ grpcio
 grpcio-status==1.62.2
 h11==0.14.0
 h5py==3.10.0
-hexbytes==0.3.1
+hexbytes
 hmmlearn==0.3.2
 holidays==0.57
 html2image==2.0.4.3
