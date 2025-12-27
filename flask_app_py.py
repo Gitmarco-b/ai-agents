@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """
-<<<<<<< Updated upstream
 Trading Dashboard Backend
 =======
-🌙 Trading Dashboard Backend
->>>>>>> Stashed changes
+Trading Dashboard Backend
 Production-ready Flask app for HyperLiquid trading
 """
 import os
