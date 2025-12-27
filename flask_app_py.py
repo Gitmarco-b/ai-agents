@@ -58,7 +58,7 @@ EXCHANGE_CONNECTED = False
 
 try:
     # Try importing from nice_funcs.py (local file)
-    import nice_funcs as n
+    import nice_funcs_hyperliquid as n
     from eth_account import Account
     
     def _get_account():
