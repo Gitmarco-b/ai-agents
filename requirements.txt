@@ -212,8 +212,8 @@ MarkupSafe==2.1.5
 marshmallow==3.26.1
 marshmallow-oneofschema==3.2.0
 marshmallow_dataclass==8.7.1
-matplotlib==3.7.1
-matplotlib-inline==0.1.7
+matplotlib
+matplotlib-inline
 mdurl==0.1.2
 mistune==3.0.2
 ml-dtypes==0.3.2
