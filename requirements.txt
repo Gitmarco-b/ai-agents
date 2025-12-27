@@ -248,7 +248,7 @@ oauthlib==3.2.2
 onnxruntime==1.22.0
 open-interpreter
 openai
-openai-whisper==20231117
+openai-whisper
 opencv-python==4.10.0.84
 opt-einsum==3.3.0
 optree==0.11.0
