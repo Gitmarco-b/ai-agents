@@ -5,8 +5,8 @@ aiohappyeyeballs==2.6.1
 aiohttp==3.10.11
 aiohttp-retry==2.9.1
 aiosignal==1.4.0
-anchorpy==0.20.1
-anchorpy-core==0.2.0
+anchorpy
+anchorpy-core
 annotated-types==0.7.0
 anthropic==0.40.0
 anyio==3.7.1
@@ -84,7 +84,7 @@ distro==1.9.0
 docopt==0.6.2
 ecdsa==0.18.0
 editor==1.6.6
-elevenlabs==0.2.24
+elevenlabs
 emoji==2.14.0
 eth-abi==4.2.1
 eth-account==0.11.0
@@ -388,8 +388,8 @@ slicer==0.0.8
 smmap==5.0.1
 sniffio==1.3.1
 socksio==1.0.0
-solana==0.35.1
-solders==0.21.0
+solana
+solders
 sortedcontainers==2.4.0
 sounddevice==0.4.6
 soundfile==0.12.1
