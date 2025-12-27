@@ -198,7 +198,7 @@ lark==1.2.2
 leb128==1.0.8
 libclang==18.1.1
 lighter-sdk
-lighter-v1-python==1.0.7
+lighter-v1-python
 lightgbm==4.6.0
 litellm==1.40.8
 llvmlite
@@ -295,7 +295,7 @@ ptyprocess==0.7.0
 pure-eval==0.2.2
 py==1.11.0
 py-ecc==8.0.0
-py_clob_client==0.23.0
+py_clob_client
 py_order_utils==0.3.2
 pyaml==24.4.0
 pyarrow
@@ -456,7 +456,7 @@ watchdog==6.0.0
 watchfiles==1.1.0
 Wave==0.0.2
 wcwidth==0.2.13
-web3==6.20.1
+web3
 webcolors==1.13
 webdriver-manager==4.0.2
 webencodings==0.5.1
