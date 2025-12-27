@@ -12,7 +12,8 @@ from pathlib import Path
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
-import CORS
+from flask_cors import CORS
+CORS(app)
 
 # ============================================================================
 # SETUP & CONFIGURATION
