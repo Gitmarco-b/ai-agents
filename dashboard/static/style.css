@@ -1,4 +1,5 @@
 /* Trading Dashboard - Dark Mode */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 * {
     margin: 0;
@@ -19,13 +20,15 @@
     --accent-yellow: #ffa502;
     --border-color: #2a2a2a;
     --shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'SF Mono', 'Monaco', 'Courier New', monospace;
 }
 
 html, body {
     height: 100%;
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-family: var(--font-primary);
     overflow-x: hidden;
 }
 
@@ -54,15 +57,15 @@ html, body {
 }
 
 .header h1 {
-    font-size: 24px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 600;
     letter-spacing: -0.5px;
 }
 
 .agent-badge {
-    padding: 6px 12px;
+    padding: 5px 10px;
     border-radius: 6px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -99,18 +102,18 @@ html, body {
 }
 
 .timestamp {
-    font-size: 14px;
-    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    font-family: var(--font-mono);
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
 }
 
 /* Buttons */
 .btn {
-    padding: 10px 20px;
+    padding: 8px 16px;
     border: none;
     border-radius: 6px;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -174,7 +177,7 @@ html, body {
 }
 
 .summary-item .label {
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 1px;
     color: var(--text-muted);
@@ -182,14 +185,14 @@ html, body {
 }
 
 .summary-item .value {
-    font-size: 28px;
+    font-size: 22px;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: var(--text-primary);
 }
 
 .summary-item .sublabel {
-    font-size: 12px;
+    font-size: 9px;
     color: var(--text-secondary);
 }
 
@@ -260,7 +263,7 @@ html, body {
 }
 
 .card-header h2 {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
 }
@@ -320,7 +323,7 @@ html, body {
 
 .position-value,
 .trade-value {
-    font-size: 14px;
+    font-size: 13px;
     font-variant-numeric: tabular-nums;
     color: var(--text-primary);
     font-weight: 500;
@@ -351,8 +354,8 @@ html, body {
     background: #0d0d0d;
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    padding: 15px;
-    font-family: 'Monaco', 'Courier New', monospace;
+    padding: 12px;
+    font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.6;
     overflow-y: auto;
@@ -367,6 +370,72 @@ html, body {
 
 .console-line:last-child {
     margin-bottom: 0;
+}
+
+/* Console log level colors */
+.console-line.success {
+    color: var(--accent-green);
+}
+
+.console-line.error {
+    color: var(--accent-red);
+}
+
+.console-line.warning {
+    color: var(--accent-yellow);
+}
+
+.console-line.trade {
+    color: var(--accent-blue);
+}
+
+.console-line.info {
+    color: var(--text-secondary);
+}
+
+
+/* Simplified trade lines for Recent Trades */
+
+.trade-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.trade-line:hover {
+    background: #252525;
+    border-color: var(--accent-blue);
+}
+
+.trade-line:last-child {
+    margin-bottom: 0;
+}
+
+.trade-time {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    min-width: 70px;
+    font-size: 11px;
+}
+
+.trade-symbol {
+    font-weight: 600;
+    min-width: 60px;
+    color: var(--text-primary);
+}
+
+.trade-pnl {
+    font-weight: 600;
+    text-align: right;
+    min-width: 60px;
+    font-family: var(--font-mono);
 }
 
 /* Empty State */
@@ -418,10 +487,16 @@ html, body {
 }
 
 @media (max-width: 768px) {
+    /* Compact header */
     .header {
+        padding: 12px 15px;
         flex-direction: column;
-        gap: 15px;
+        gap: 10px;
         align-items: flex-start;
+    }
+    
+    .header h1 {
+        font-size: 14px;
     }
     
     .header-right {
@@ -429,17 +504,51 @@ html, body {
         justify-content: space-between;
     }
     
+    /* Metrics in 2x2 grid */
     .account-summary {
-        grid-template-columns: 1fr;
-        padding: 15px;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 9px;
+        padding: 9px 12px;
     }
     
+    .summary-item .value {
+        font-size: 18px;
+    }
+    
+    /* MAIN CONTENT: Reorder panels */
     .main-content {
-        padding: 15px;
+        display: flex;
+        flex-direction: column;
+        padding: 12px 15px;
+        gap: 15px;
     }
     
+    /* Positions first */
+    .panel {
+        order: 1;
+    }
+    
+    /* Console second */
+    .console-panel {
+        order: 2;
+    }
+    
+    /* Compact position cards */
     .position,
     .trade {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        padding: 12px;
+    }
+    
+    /* Smaller buttons */
+    .btn {
+        padding: 8px 14px;
+        font-size: 12px;
+    }
+    
+    .btn-small {
+        padding: 5px 10px;
+        font-size: 11px;
     }
 }

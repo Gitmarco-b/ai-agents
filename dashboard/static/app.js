@@ -5,12 +5,19 @@ let updateInterval;
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Dashboard initializing...');
-    addConsoleMessage('🌐 Dashboard initialized');
-    updateDashboard();
-    updateInterval = setInterval(updateDashboard, 10000); // Update every 10 seconds
     
-    // Update console logs separately
+    // Load agent state first
+    loadAgentState();
+    
+    // Initial updates
+    updateDashboard();
+    updateConsole();
+    
+    // Set up intervals
+    updateInterval = setInterval(updateDashboard, 15000); // Update every 15 seconds
     setInterval(updateConsole, 5000); // Update console every 5 seconds
+    
+    console.log('✅ Dashboard ready - auto-refresh enabled');
 });
 
 // Main update function
@@ -102,7 +109,8 @@ function updateAgentBadge(isRunning) {
     }
 }
 
-// Update positions display
+// Update positions display with 7 fields
+
 function updatePositions(positions) {
     const container = document.getElementById('positions');
     const badge = document.getElementById('position-count');
@@ -129,8 +137,16 @@ function updatePositions(positions) {
                 <span class="position-value">${Math.abs(pos.size).toFixed(4)}</span>
             </div>
             <div class="position-item">
-                <span class="position-label">Entry</span>
+                <span class="position-label">Position Value</span>
+                <span class="position-value">$${pos.position_value ? pos.position_value.toFixed(2) : '0.00'}</span>
+            </div>
+            <div class="position-item">
+                <span class="position-label">Entry Price</span>
                 <span class="position-value">$${pos.entry_price.toFixed(2)}</span>
+            </div>
+            <div class="position-item">
+                <span class="position-label">Mark Price</span>
+                <span class="position-value">$${pos.mark_price ? pos.mark_price.toFixed(2) : pos.entry_price.toFixed(2)}</span>
             </div>
             <div class="position-item">
                 <span class="position-label">P&L</span>
@@ -142,7 +158,8 @@ function updatePositions(positions) {
     `).join('');
 }
 
-// Update trades history
+// Update trades history (simplified plain text)
+
 function updateTrades(trades) {
     const container = document.getElementById('trades');
     
@@ -151,39 +168,31 @@ function updateTrades(trades) {
         return;
     }
     
+    // Show last 10 trades as simple text lines
     container.innerHTML = trades.slice(0, 10).map(trade => {
-        const timestamp = new Date(trade.timestamp).toLocaleString();
+        const time = new Date(trade.timestamp).toLocaleTimeString('en-US', { 
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit'
+        });
         const pnl = trade.pnl || 0;
+        const pnlStr = pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`;
         const pnlClass = pnl >= 0 ? 'positive' : 'negative';
+        const side = trade.side || 'LONG';
         
         return `
-            <div class="trade">
-                <div class="trade-item">
-                    <span class="trade-label">Time</span>
-                    <span class="trade-value">${timestamp}</span>
-                </div>
-                <div class="trade-item">
-                    <span class="trade-label">Symbol</span>
-                    <span class="trade-value">${trade.symbol}</span>
-                </div>
-                <div class="trade-item">
-                    <span class="trade-label">Side</span>
-                    <span class="trade-value"><span class="side ${trade.side ? trade.side.toLowerCase() : 'long'}">${trade.side || 'LONG'}</span></span>
-                </div>
-                <div class="trade-item">
-                    <span class="trade-label">Price</span>
-                    <span class="trade-value">$${trade.price ? trade.price.toFixed(2) : '0.00'}</span>
-                </div>
-                <div class="trade-item">
-                    <span class="trade-label">P&L</span>
-                    <span class="trade-value pnl ${pnlClass}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</span>
-                </div>
+            <div class="trade-line">
+                <span class="trade-time">${time}</span>
+                <span class="trade-symbol">${trade.symbol}</span>
+                <span class="side ${side.toLowerCase()}">${side}</span>
+                <span class="trade-pnl pnl ${pnlClass}">${pnlStr}</span>
             </div>
         `;
     }).join('');
 }
 
 // Update console logs
+
 async function updateConsole() {
     try {
         const response = await fetch('/api/console');
@@ -192,21 +201,67 @@ async function updateConsole() {
         const consoleEl = document.getElementById('console');
         
         if (logs.length === 0) {
+            consoleEl.innerHTML = '<div class="console-line info">No activity yet</div>';
             return;
         }
         
-        // Keep only last 50 logs
-        const recentLogs = logs.slice(-50);
+        // Keep last 50 logs and REVERSE (newest first)
+        const recentLogs = logs.slice(-50).reverse();
         
-        consoleEl.innerHTML = recentLogs.map(log => 
-            `<div class="console-line">[${log.timestamp}] ${log.message}</div>`
-        ).join('');
+        // Render with level classes and selective emojis
+        consoleEl.innerHTML = recentLogs.map(log => {
+            const emoji = getLogEmoji(log);
+            const levelClass = log.level || 'info';
+            return `<div class="console-line ${levelClass}">${emoji}[${log.timestamp}] ${log.message}</div>`;
+        }).join('');
         
-        // Auto-scroll to bottom
-        consoleEl.scrollTop = consoleEl.scrollHeight;
+        // NO auto-scroll (newest is at top now)
         
     } catch (error) {
         console.error('Error updating console:', error);
+    }
+}
+
+// Helper function for selective emoji usage
+function getLogEmoji(log) {
+    const msg = log.message.toLowerCase();
+    const level = log.level || 'info';
+    
+    // Only add emoji for important events
+    if (level === 'success' && msg.includes('started')) return '▶️ ';
+    if (level === 'info' && msg.includes('stopped')) return '⏹️ ';
+    if (level === 'trade') {
+        if (msg.includes('📈')) return ''; // Emoji already in message
+        if (msg.includes('📉')) return ''; // Emoji already in message
+    }
+    if (level === 'error') return '❌ ';
+    
+    return ''; // No emoji for most messages
+}
+
+// Load agent state on page load
+async function loadAgentState() {
+    try {
+        const response = await fetch('/api/status');
+        const data = await response.json();
+        
+        console.log('Agent state loaded:', data);
+        
+        // Update UI based on persisted state
+        updateAgentBadge(data.running);
+        
+        // Log last action info
+        if (data.last_started) {
+            const lastStart = new Date(data.last_started).toLocaleTimeString();
+            console.log(`Last agent start: ${lastStart}`);
+        }
+        if (data.last_stopped) {
+            const lastStop = new Date(data.last_stopped).toLocaleTimeString();
+            console.log(`Last agent stop: ${lastStop}`);
+        }
+        
+    } catch (error) {
+        console.error('Error loading agent state:', error);
     }
 }
 

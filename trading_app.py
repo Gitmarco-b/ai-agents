@@ -199,7 +199,6 @@ def get_positions_data():
                     
                     # Calculate position value in USD
                     position_value = abs(float(pos_size)) * mark_price
-                    
                     positions.append({
                         "symbol": symbol,
                         "size": float(pos_size),
@@ -328,7 +327,16 @@ def get_console_logs():
     try:
         if CONSOLE_FILE.exists():
             with open(CONSOLE_FILE, 'r') as f:
-                return json.load(f)
+                content = f.read()
+                if not content.strip():
+                    return []
+                return json.loads(content)
+        return []
+    except json.JSONDecodeError as e:
+        print(f"⚠️ Console log file corrupted, resetting: {e}")
+        # Reset corrupted file
+        with open(CONSOLE_FILE, 'w') as f:
+            json.dump([], f)
         return []
     except Exception as e:
         print(f"⚠️ Error loading console logs: {e}")
