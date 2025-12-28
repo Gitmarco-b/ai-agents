@@ -43,7 +43,7 @@ html, body {
 .header {
     background: var(--bg-secondary);
     border-bottom: 2px solid var(--border-color);
-    padding: 20px 30px;
+    padding: 18px 18px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -52,8 +52,9 @@ html, body {
 
 .header-left {
     display: flex;
+    align-content: flex-start;
     align-items: center;
-    gap: 15px;
+    gap: 9px;
 }
 
 .header h1 {
@@ -63,9 +64,9 @@ html, body {
 }
 
 .agent-badge {
-    padding: 5px 10px;
+    padding: 6px 12px;
     border-radius: 6px;
-    font-size: 11px;
+    font-size: 9px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -96,9 +97,10 @@ html, body {
 }
 
 .header-right {
-    display: flex;
+    display: column;
+    align-content: flex-end;
     align-items: center;
-    gap: 15px;
+    gap: 9px;
 }
 
 .timestamp {
@@ -155,7 +157,7 @@ html, body {
 .btn-run:hover {
     background: #00cc6f;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);
+    box-shadow: 0 3px 9px rgba(0, 255, 136, 0.3);
 }
 
 .btn-stop {
@@ -166,7 +168,7 @@ html, body {
 .btn-stop:hover {
     background: #ff3545;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 71, 87, 0.3);
+    box-shadow: 0 3px 9px rgba(255, 71, 87, 0.3);
 }
 
 .btn-small {
@@ -189,9 +191,9 @@ html, body {
 /* Account Summary */
 .account-summary {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
-    padding: 20px 30px;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 9px;
+    padding: 18px 18px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
 }
@@ -199,11 +201,11 @@ html, body {
 .summary-item {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
 }
 
 .summary-item .label {
-    font-size: 10px;
+    font-size: 9px;
     text-transform: uppercase;
     letter-spacing: 1px;
     color: var(--text-muted);
@@ -211,7 +213,7 @@ html, body {
 }
 
 .summary-item .value {
-    font-size: 22px;
+    font-size: 16px;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: var(--text-primary);
@@ -248,15 +250,15 @@ html, body {
     flex: 1;
     display: grid;
     grid-template-columns: 2fr 1fr;
-    gap: 20px;
-    padding: 20px 30px;
+    gap: 9px;
+    padding: 18px 18px;
     overflow-y: auto;
 }
 
 .panel {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 9px;
 }
 
 .console-panel {
@@ -268,8 +270,8 @@ html, body {
 .card {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 20px;
+    border-radius: 9px;
+    padding: 18px;
     box-shadow: var(--shadow);
 }
 
@@ -283,8 +285,8 @@ html, body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 15px;
-    padding-bottom: 15px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
     border-bottom: 1px solid var(--border-color);
 }
 
@@ -295,11 +297,11 @@ html, body {
 }
 
 .badge {
-    background: var(--accent-blue);
-    color: var(--bg-primary);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
     padding: 4px 10px;
     border-radius: 12px;
-    font-size: 12px;
+    font-size: 6px;
     font-weight: 700;
 }
 
@@ -308,7 +310,7 @@ html, body {
 .trades-container {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
     max-height: 400px;
     overflow-y: auto;
 }
@@ -318,10 +320,10 @@ html, body {
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 15px;
+    padding: 9px;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 15px;
+    gap: 9px;
     transition: all 0.2s ease;
 }
 

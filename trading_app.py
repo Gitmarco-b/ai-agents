@@ -15,6 +15,8 @@ from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 from flask_cors import CORS
+import signal  # ADD THIS
+import atexit  # ADD THIS
 
 # ============================================================================
 # SETUP & CONFIGURATION
@@ -48,9 +50,11 @@ CONSOLE_FILE = DATA_DIR / "console_logs.json"
 AGENT_STATE_FILE = DATA_DIR / "agent_state.json"
 
 # Agent control variables
+
 agent_thread = None
 agent_running = False  # Always start stopped - never auto-start
 stop_agent_flag = False
+shutdown_in_progress = False  # ADD THIS
 
 # Symbols list (for trading agent reference)
 SYMBOLS = [
@@ -658,20 +662,109 @@ def health_check():
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     
+# ============================================================================
+# GRACEFUL SHUTDOWN HANDLER
+# ============================================================================
+
+def cleanup_and_exit(signum=None, frame=None):
+    """
+    Graceful shutdown handler - ALWAYS releases port 5000
+    Called on Ctrl+C or kill signal
+    """
+    global agent_running, stop_agent_flag, shutdown_in_progress
+    
+    # Prevent multiple shutdown attempts
+    if shutdown_in_progress:
+        return
+    
+    shutdown_in_progress = True
+    
+    print("\n\n" + "="*60)
+    print("🛑 SHUTDOWN SIGNAL RECEIVED")
+    print("="*60)
+    
+    # Stop trading agent if running
+    if agent_running:
+        print("⏹️  Stopping trading agent...")
+        stop_agent_flag = True
+        agent_running = False
+        
+        # Wait for agent thread to finish (max 5 seconds)
+        if agent_thread and agent_thread.is_alive():
+            print("   Waiting for agent thread to finish...")
+            agent_thread.join(timeout=5)
+        
+        # Save final state
+        try:
+            state = load_agent_state()
+            state["running"] = False
+            state["last_stopped"] = datetime.now().isoformat()
+            save_agent_state(state)
+            add_console_log("Agent stopped - server shutting down", "info")
+            print("   ✅ Agent stopped and state saved")
+        except Exception as e:
+            print(f"   ⚠️  Error saving agent state: {e}")
+    else:
+        print("ℹ️  Trading agent was not running")
+    
+    # Log shutdown
+    try:
+        add_console_log("Dashboard server shutting down", "info")
+    except Exception:
+        pass
+    
+    print("\n✅ Cleanup complete - Port 5000 released")
+    print("="*60)
+    print("👋 Goodbye! You can restart immediately.\n")
+    
+    # Force exit to ensure port is released
+    os._exit(0)
+
+
+# Register shutdown handlers
+signal.signal(signal.SIGINT, cleanup_and_exit)   # Ctrl+C
+signal.signal(signal.SIGTERM, cleanup_and_exit)  # kill command
+atexit.register(lambda: cleanup_and_exit() if not shutdown_in_progress else None)
+
+
+# ============================================================================
+# STARTUP
+# ============================================================================
+
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 5000))
+    
     print(f"""
 {'='*60}
-🌙 Moon Dev's Trading Dashboard
+Marco's AI Trading Dashboard
 {'='*60}
 Dashboard URL: http://0.0.0.0:{port}
+Local URL: http://localhost:{port}
 Exchange: HyperLiquid
 Status: {'Connected ✅' if EXCHANGE_CONNECTED else 'Demo Mode ⚠️'}
 Agent: {'Running 🟢' if agent_running else 'Stopped 🔴'}
 {'='*60}
+
+Press Ctrl+C to shutdown gracefully
+Port {port} will be released immediately on exit
 """)
     
-    add_console_log("🌐 Dashboard server started")
+    add_console_log("Dashboard server started", "info")
     
     if not EXCHANGE_CONNECTED:
-        add_console_log("⚠️ Running in DEMO mode - HyperLiquid not connected")
+        add_console_log("Running in DEMO mode - HyperLiquid not connected", "warning")
     
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    try:
+        # Run Flask with proper settings for clean shutdown
+        app.run(
+            host='0.0.0.0',
+            port=port,
+            debug=False,
+            use_reloader=False,
+            threaded=True
+        )
+    except KeyboardInterrupt:
+        cleanup_and_exit()
+    except Exception as e:
+        print(f"\n❌ Server error: {e}")
+        cleanup_and_exit()
