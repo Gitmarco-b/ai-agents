@@ -484,7 +484,7 @@ def run_trading_agent():
                 from trading_agent import MONITORED_TOKENS as tokens
             
             # Log analysis start
-            add_console_log(f"Analyzing {len(tokens)} tokens", "info")
+            add_console_log(f"\n🤖 Analyzing {len(tokens)} tokens", "info")
             
             # Run the trading cycle
             agent.run_trading_cycle()
@@ -500,10 +500,12 @@ def run_trading_agent():
                 sell_count = len(agent.recommendations_df[agent.recommendations_df['action'] == 'SELL'])
                 nothing_count = len(agent.recommendations_df[agent.recommendations_df['action'] == 'NOTHING'])
                 
-                add_console_log(f"Signals: {buy_count} BUY, {sell_count} SELL, {nothing_count} HOLD", "info")
-            
+                add_console_log(f"Signals: {buy_count} BUY, {sell_count} SELL, {nothing_count} HOLD", "trade")
+
+            from trading_agent import SLEEP_BETWEEN_RUNS_MINUTES as minutes
             # Wait 60 minutes before next cycle
-            add_console_log("Next cycle in 60 min", "info")
+            add_console_log("✅ Finished Trading cycle...", "info")
+            add_console_log("Next cycle starts in minutes", "info")
             
             # Wait with stop flag checking every minute
             for i in range(60):
