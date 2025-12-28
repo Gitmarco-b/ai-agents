@@ -23,4 +23,4 @@ COPY . /app
 
 # default command: run your worker + web server
 # (change path only if different)
-CMD ["python", "main/main.py"]
+CMD ["python", "main/trading_app.py"]
