@@ -822,18 +822,29 @@ def get_history():
 
 @app.route('/api/console')
 def get_console():
-    """Return full console logs, including in-memory cache for live updates."""
+    """
+    Return console logs with proper deduplication and ordering
+    Only reads from file (not in-memory cache) to avoid duplicates
+    """
     try:
-        with console_log_lock:
-            cached = list(console_log_cache)
         if CONSOLE_FILE.exists():
             with open(CONSOLE_FILE, 'r') as f:
                 content = f.read().strip()
-                file_logs = json.loads(content) if content else []
+                logs = json.loads(content) if content else []
         else:
-            file_logs = []
-        merged = (file_logs + cached)[-500:]
-        return jsonify(merged)
+            logs = []
+        
+        # Return last 100 logs only (reduces clutter and improves performance)
+        # Logs are already in chronological order from the file
+        return jsonify(logs[-100:])
+        
+    except json.JSONDecodeError as e:
+        print(f"⚠️ Console log file corrupted: {e}", flush=True)
+        # Reset corrupted file
+        with open(CONSOLE_FILE, 'w') as f:
+            json.dump([], f)
+        return jsonify([])
+        
     except Exception as e:
         print(f"⚠️ Error reading console logs: {e}", flush=True)
         return jsonify([])
