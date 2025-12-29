@@ -620,11 +620,54 @@ def get_account_balance(account=None):
 # ============================================================================
 
 def run_trading_agent():
-    """Run the trading agent in a loop with output capture"""
+    """Run the trading agent in a loop with output capture - Agent created ONCE"""
     global agent_running, stop_agent_flag, agent_executing
+    
+    # ========================================================================
+    # STEP 1: CREATE AGENT INSTANCE ONCE (before the loop)
+    # ========================================================================
+    try:
+        add_console_log("🔧 Initializing Trading Agent...", "info")
+        
+        # Try importing from src.agents first
+        try:
+            from src.agents.trading_agent import TradingAgent
+        except ImportError:
+            # Fallback: try direct import
+            try:
+                from trading_agent import TradingAgent
+            except ImportError:
+                # Last resort: add to path and import
+                import sys
+                sys.path.insert(0, str(BASE_DIR / "src" / "agents"))
+                from trading_agent import TradingAgent
+        
+        # Create single agent instance that will be reused for all cycles
+        agent = TradingAgent()
+        add_console_log("✅ Trading agent instance created successfully", "success")
+        
+    except Exception as e:
+        add_console_log(f"❌ Failed to create agent: {str(e)}", "error")
+        import traceback
+        traceback.print_exc()
+        
+        # Reset flags and exit
+        with agent_lock:
+            agent_running = False
+            agent_executing = False
+        return
+    
+    # ========================================================================
+    # STEP 2: RUN TRADING CYCLES IN LOOP (reusing same agent)
+    # ========================================================================
+    cycle_count = 0
     
     while agent_running and not stop_agent_flag:
         try:
+            cycle_count += 1
+            add_console_log(f"\n{'='*60}", "info")
+            add_console_log(f"🔄 Starting Cycle #{cycle_count}", "info")
+            add_console_log(f"{'='*60}", "info")
             
             # SET EXECUTION FLAG WITH LOCK
             with agent_lock:
@@ -633,20 +676,6 @@ def run_trading_agent():
             # Capture start time
             cycle_start = time.time()
             
-            # Import trading agent
-            try:
-                from src.agents.trading_agent import TradingAgent
-            except ImportError:
-                try:
-                    from src.agents.trading_agent import TradingAgent
-                except ImportError:
-                    import sys
-                    sys.path.insert(0, str(BASE_DIR / "src" / "agents"))
-                    from trading_agent import TradingAgent
-            
-            # Create agent instance
-            agent = TradingAgent()
-            
             # Get tokens list
             if EXCHANGE in ["ASTER", "HYPERLIQUID"]:
                 from src.agents.trading_agent import SYMBOLS as tokens
@@ -654,15 +683,15 @@ def run_trading_agent():
                 from src.agents.trading_agent import MONITORED_TOKENS as tokens
             
             # Log analysis start
-            add_console_log(f"\n🤖 Analyzing {len(tokens)} tokens", "info")
+            add_console_log(f"🤖 Analyzing {len(tokens)} tokens", "info")
             
-            # Run the trading cycle
+            # Run the trading cycle (REUSE SAME AGENT INSTANCE)
             agent.run_trading_cycle()
             
             # Calculate cycle duration
             cycle_duration = int(time.time() - cycle_start)
             
-            add_console_log(f"Cycle complete ({cycle_duration}s)", "success")
+            add_console_log(f"✅ Cycle #{cycle_count} complete ({cycle_duration}s)", "success")
 
             # CLEAR EXECUTION FLAG WITH LOCK
             with agent_lock:
@@ -673,15 +702,16 @@ def run_trading_agent():
                 buy_count = len(agent.recommendations_df[agent.recommendations_df['action'] == 'BUY'])
                 sell_count = len(agent.recommendations_df[agent.recommendations_df['action'] == 'SELL'])
                 nothing_count = len(agent.recommendations_df[agent.recommendations_df['action'] == 'NOTHING'])
-
+                add_console_log(f"📊 Signals: {buy_count} BUY, {sell_count} SELL, {nothing_count} HOLD", "info")
             
-            # Wait 60 minutes before next cycle
+            # Wait before next cycle
             from src.agents.trading_agent import SLEEP_BETWEEN_RUNS_MINUTES as minutes
+            add_console_log(f"⏰ Next cycle in {minutes} minutes", "info")
             
             # Wait with stop flag checking every minute
-            for i in range(60):
+            for i in range(minutes):
                 if stop_agent_flag:
-                    add_console_log("Stop signal received", "info")
+                    add_console_log("🛑 Stop signal received", "info")
                     break
                 time.sleep(60)
             
@@ -690,19 +720,21 @@ def run_trading_agent():
             with agent_lock:
                 agent_executing = False
                 
-            error_msg = f"Cycle error: {str(e)}"
+            error_msg = f"❌ Cycle #{cycle_count} error: {str(e)}"
             add_console_log(error_msg, "error")
             import traceback
             traceback.print_exc()
-            add_console_log("Retrying in 60 sec", "warning")
+            add_console_log("🔄 Retrying in 60 sec", "warning")
             time.sleep(60)
     
-    # FINAL CLEANUP WITH LOCK
+    # ========================================================================
+    # STEP 3: CLEANUP WHEN LOOP EXITS
+    # ========================================================================
     with agent_lock:
         agent_running = False
         agent_executing = False
         
-    add_console_log("Agent stopped", "info")
+    add_console_log(f"🛑 Agent stopped after {cycle_count} cycles", "info")
 
 # ============================================================================
 # FLASK ROUTES
@@ -955,11 +987,12 @@ def cleanup_and_exit(signum=None, frame=None):
     os._exit(0)
 
 
-# Register shutdown handlers
-signal.signal(signal.SIGINT, cleanup_and_exit)   # Ctrl+C
-signal.signal(signal.SIGTERM, cleanup_and_exit)  # kill command
-atexit.register(lambda: cleanup_and_exit() if not shutdown_in_progress else None)
-
+# Register shutdown handlers ONLY if we're in the main thread
+# This prevents "signal only works in main thread" errors during circular imports
+if threading.current_thread() is threading.main_thread():
+    signal.signal(signal.SIGINT, cleanup_and_exit)   # Ctrl+C
+    signal.signal(signal.SIGTERM, cleanup_and_exit)  # kill command
+    atexit.register(lambda: cleanup_and_exit() if not shutdown_in_progress else None)
 
 # ============================================================================
 # STARTUP
