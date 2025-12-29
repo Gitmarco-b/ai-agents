@@ -22,8 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTimestamp(); // Initialize timestamp with saved timezone
     
     // Set up intervals
-    updateInterval = setInterval(updateDashboard, 10000);
-    setInterval(updateConsole, 5000);
+    updateInterval = setInterval(updateDashboard, 10000); // Changed to 10000 (10s)
+    setInterval(updateConsole, 10000);
     setInterval(updateTimestamp, 1000); // Update timestamp every second
     
     console.log('✅ Dashboard ready - auto-refresh enabled');
@@ -69,7 +69,7 @@ async function updateDashboard() {
         updateExchange(data.exchange);
         updateTimestamp();
         updatePositions(data.positions);
-        updateAgentBadge(data.agent_running);
+        updateAgentBadge(data.agent_running, agentStatus.executing); // Pass execution state
         
         // Fetch trades
         const tradesResponse = await fetch('/api/trades');
@@ -131,46 +131,27 @@ function updateTimestamp() {
     document.getElementById('timestamp').textContent = timeString;
 }
 
-// Update agent badge with execution state
-async function updateAgentBadge(isRunning) {
+// Update agent badge with execution state (no API calls - uses passed data)
+function updateAgentBadge(isRunning, isExecuting = false) {
     const badge = document.getElementById('agent-badge');
     const runBtn = document.getElementById('run-btn');
     const stopBtn = document.getElementById('stop-btn');
     
-    // Check if actively executing
-    try {
-        const statusResponse = await fetch('/api/agent-status');
-        const status = await statusResponse.json();
-        
-        if (status.executing) {
-            badge.textContent = 'Analyzing';
-            badge.className = 'agent-badge running';
-            runBtn.style.display = 'none';
-            stopBtn.style.display = 'inline-block';
-        } else if (isRunning) {
-            badge.textContent = 'Waiting';
-            badge.className = 'agent-badge running';
-            runBtn.style.display = 'none';
-            stopBtn.style.display = 'inline-block';
-        } else {
-            badge.textContent = 'Ready';
-            badge.className = 'agent-badge ready';
-            runBtn.style.display = 'inline-block';
-            stopBtn.style.display = 'none';
-        }
-    } catch (error) {
-        // Fallback to simple logic
-        if (isRunning) {
-            badge.textContent = 'Running';
-            badge.className = 'agent-badge running';
-            runBtn.style.display = 'none';
-            stopBtn.style.display = 'inline-block';
-        } else {
-            badge.textContent = 'Ready';
-            badge.className = 'agent-badge ready';
-            runBtn.style.display = 'inline-block';
-            stopBtn.style.display = 'none';
-        }
+    if (isExecuting) {
+        badge.textContent = 'Analyzing';
+        badge.className = 'agent-badge running';
+        runBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-block';
+    } else if (isRunning) {
+        badge.textContent = 'Waiting';
+        badge.className = 'agent-badge running';
+        runBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-block';
+    } else {
+        badge.textContent = 'Ready';
+        badge.className = 'agent-badge ready';
+        runBtn.style.display = 'inline-block';
+        stopBtn.style.display = 'none';
     }
 }
 
