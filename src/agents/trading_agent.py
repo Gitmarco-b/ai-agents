@@ -1457,7 +1457,7 @@ Trading Recommendations (BUY signals only):
             cprint("\n📈 Analyzing tokens for new entry opportunities...", "white", "on_blue")
             for token, data in market_data.items():
                 cprint(f"\n🤖 Analyzing {token}...", "white", "on_green")
-                log_and_print(f"\n🤖 Analyzing {token}...", "white", "on_green")
+                log_and_print(f"\n🤖 Analyzing {token}...", "info")
 
 
                 if strategy_signals and token in strategy_signals:
@@ -1482,7 +1482,7 @@ Trading Recommendations (BUY signals only):
                 allocation = self.allocate_portfolio()
                 if allocation:
                     cprint("\n💼 Executing portfolio allocations...", "white", "on_blue")
-                    log_and_print("\n💼 Executing portfolio allocations...", "white", "on_blue")
+                    log_and_print("\n💼 Executing portfolio allocations...", "info")
                     self.execute_allocations(allocation)
 
             # STEP 8: FINAL PORTFOLIO REPORT
@@ -1546,10 +1546,11 @@ def main():
             next_run = datetime.now() + timedelta(minutes=SLEEP_BETWEEN_RUNS_MINUTES)
             cprint(f"\n⏰ Next cycle at UTC: {next_run.strftime('%d-%m-%Y %H:%M:%S')}", "white", "on_green")
             time.sleep(SLEEP_BETWEEN_RUNS_MINUTES * 60)
+            log_and_print(f"\n⏰ Next cycle at UTC: {next_run.strftime('%d-%m-%Y %H:%M:%S')}", "info)
             
         except KeyboardInterrupt:
             cprint("\n👋 AI Agent shutting down gracefully...", "white", "on_blue")
-            log_and_print("\n👋 AI Agent shutting down gracefully...", "white", "on_blue")
+            log_and_print("\n👋 AI Agent shutting down gracefully...", "info")
             break
         except Exception as e:
             cprint(f"\n❌ Error in main loop: {e}", "white", "on_red")
