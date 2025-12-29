@@ -719,10 +719,10 @@ def get_console():
     show full logs for analysis and trade execution phases,
     but throttle everything else.
     """
-    global console_log, agent_execution
+    global console_log, agent_running
 
     # Default: show all logs if agent not executing
-    if not agent_execution:
+    if not agent_running:
         return jsonify(console_log[-200:])  # last 200 logs, for safety
 
     # --- Smart Dashboard Updates active ---
