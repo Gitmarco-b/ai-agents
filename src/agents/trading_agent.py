@@ -507,7 +507,7 @@ class TradingAgent:
             cprint("   💡 SELL signals can close longs OR open shorts", "white")
 
         cprint("\n🤖 LLM Trading Agent initialized!", "green")
-        log_and_print("\n🤖 LLM Trading Agent initialized!", "green")
+        log_and_print("\n🤖 LLM Trading Agent initialized!", "success")
 
     def chat_with_ai(self, system_prompt, user_content):
         """Send prompt to AI model via model factory"""
@@ -531,7 +531,7 @@ class TradingAgent:
         """Format market data into a clean, readable format for swarm analysis"""
         try:
             cprint(f"\n📊 MARKET DATA RECEIVED FOR {token[:8]}...", "cyan", attrs=["bold"])
-            log_and_print(f"\n📊 MARKET DATA RECEIVED FOR {token[:8]}...", "cyan", attrs=["bold"])
+            log_and_print(f"\n📊 MARKET DATA RECEIVED FOR {token[:8]}...", "info")
 
             if isinstance(market_data, pd.DataFrame):
                 cprint(f"✅ DataFrame received: {len(market_data)} bars", "green")
@@ -674,7 +674,7 @@ FULL DATASET:
 
         cprint("\n" + "=" * 60, "yellow")
         cprint("🤖 AI ANALYZING OPEN POSITIONS", "white", "on_magenta", attrs=["bold"])
-        log_and_print("🤖 AI ANALYZING OPEN POSITIONS", "white", "on_magenta", attrs=["bold"])
+        log_and_print("🤖 AI ANALYZING OPEN POSITIONS", "info")
         cprint("=" * 60, "yellow")
 
         # Build position summary
@@ -1061,6 +1061,7 @@ Example format:
 Total Portfolio Size: ${account_balance:,.2f} USD
 Trading Recommendations (BUY signals only):
 {buy_recommendations.to_string()}
+"""
 """
 
             # --- Call AI model ---
@@ -1499,7 +1500,7 @@ Trading Recommendations (BUY signals only):
 
             cprint(f"\n{'=' * 80}", "cyan")
             cprint("✅ TRADING CYCLE COMPLETE", "white", "on_green", attrs=["bold"])
-            log_and_print("✅ Trading cycle complete", "success")
+            log_and_print("Trading cycle complete", "success")
             cprint(f"{'=' * 80}\n", "cyan")
 
             # --- Display Account Balance and Invested Totals ---
@@ -1546,7 +1547,7 @@ def main():
             next_run = datetime.now() + timedelta(minutes=SLEEP_BETWEEN_RUNS_MINUTES)
             cprint(f"\n⏰ Next cycle at UTC: {next_run.strftime('%d-%m-%Y %H:%M:%S')}", "white", "on_green")
             time.sleep(SLEEP_BETWEEN_RUNS_MINUTES * 60)
-            log_and_print(f"\n⏰ Next cycle at UTC: {next_run.strftime('%d-%m-%Y %H:%M:%S')}", "info)
+            log_and_print(f"\n⏰ Next cycle in {timedelta(minutes=SLEEP_BETWEEN_RUNS_MINUTES)} minutes"}, "info")
             
         except KeyboardInterrupt:
             cprint("\n👋 AI Agent shutting down gracefully...", "white", "on_blue")
