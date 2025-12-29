@@ -79,8 +79,8 @@ buy_under = 0.99  # Buy if price drops 1% below target
 sell_over = 1.01  # Sell if price rises 1% above target
 
 # Data collection settings 📈
-DAYSBACK_4_DATA = 2
-DATA_TIMEFRAME = '30m' 
+DAYSBACK_4_DATA = 1
+DATA_TIMEFRAME = '5m' 
 SAVE_OHLCV_DATA = False 
 
 # AI Model Settings 🤖
