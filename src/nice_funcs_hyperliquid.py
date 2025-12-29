@@ -1,5 +1,5 @@
 """
-🌙 Moon Dev's HyperLiquid Trading Functions
+🌙 HyperLiquid Trading Functions
 Focused functions for HyperLiquid perps trading
 Built with love by Moon Dev 🚀
 
