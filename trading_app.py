@@ -470,7 +470,7 @@ Press Ctrl+C to shutdown gracefully
 Port {port} will be released immediately on exit
 """)
 
-    add_console_log("Dashboard server started", "info")
+def add_console_log("Dashboard server started", "info")
 
     if not EXCHANGE_CONNECTED:
         add_console_log("Running in DEMO mode - HyperLiquid not connected", "warning")
