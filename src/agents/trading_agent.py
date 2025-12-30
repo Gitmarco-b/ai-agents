@@ -1147,7 +1147,7 @@ Trading Recommendations (BUY signals only):
             traceback.print_exc()
             return None
 
-def execute_allocations(self, allocation_dict):
+   def execute_allocations(self, allocation_dict):
         """Execute the allocations using AI entry for each position"""
         try:
             print("\n🚀 Executing portfolio allocations...")
@@ -1197,10 +1197,12 @@ def execute_allocations(self, allocation_dict):
                             cprint(f"🔵 HyperLiquid: ai_entry({token}, ${amount:.2f}, leverage={LEVERAGE})", "cyan")
                             add_console_log(f"🔵 Executing: ai_entry({token}, ${amount:.2f}, {LEVERAGE}x)", "info")
                             n.ai_entry(token, amount, leverage=LEVERAGE, account=self.account)
+                        
                         elif EXCHANGE == "ASTER":
                             cprint(f"🟣 Aster: ai_entry({token}, ${amount:.2f}, leverage={LEVERAGE})", "cyan")
                             add_console_log(f"🟣 Executing: ai_entry({token}, ${amount:.2f}, {LEVERAGE}x)", "info")
                             n.ai_entry(token, amount, leverage=LEVERAGE)
+                        
                         else:
                             cprint(f"🟢 Solana: ai_entry({token}, ${amount:.2f})", "cyan")
                             add_console_log(f"🟢 Executing: ai_entry({token}, ${amount:.2f})", "info")
@@ -1241,7 +1243,7 @@ def execute_allocations(self, allocation_dict):
             print(error_msg)
             add_console_log(error_msg, "error")
             print("🔧 Check the logs and try again!")
-
+            
     def handle_exits(self):
         """Check and exit positions based on SELL recommendations"""
         import inspect
