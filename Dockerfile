@@ -16,7 +16,7 @@ ENV PYTHONUNBUFFERED=1
 
 # Copy and install dependencies first to benefit from docker cache
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install -r requirements.txt
 
 # Copy full repo
 COPY . /app
