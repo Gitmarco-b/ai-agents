@@ -60,3 +60,21 @@ def add_console_log(message, level="info", console_file=None):
 
     except Exception as e:
         print(f"⚠️ Error in add_console_log: {e}")
+
+
+def log_position_open(symbol, side, size_usd, console_file=None):
+    """
+    Log when a trading position is opened
+
+    Args:
+        symbol (str): Trading symbol (e.g., 'BTC', 'ETH')
+        side (str): Position side ('LONG' or 'SHORT')
+        size_usd (float): Position size in USD
+        console_file (Path): Optional path to console log file
+    """
+    try:
+        emoji = "📈" if side == "LONG" else "📉"
+        message = f"{emoji} Opened {side} {symbol} ${size_usd:.2f}"
+        add_console_log(message, "trade", console_file)
+    except Exception as e:
+        print(f"⚠️ Error logging position open: {e}")

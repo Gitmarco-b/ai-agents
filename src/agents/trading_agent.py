@@ -54,11 +54,15 @@ from src.data.ohlcv_collector import collect_all_tokens
 
 # Import shared logging utility (prevents circular import with trading_app)
 try:
-    from src.utils.logging_utils import add_console_log
+    from src.utils.logging_utils import add_console_log, log_position_open
 except ImportError:
     # Fallback if running standalone without trading_app
     def add_console_log(message, level="info", console_file=None):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+
+    def log_position_open(symbol, side, size_usd, console_file=None):
+        emoji = "📈" if side == "LONG" else "📉"
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {emoji} Opened {side} {symbol} ${size_usd:.2f}")
 
 
 # Load Environment Variables
@@ -1208,15 +1212,8 @@ Trading Recommendations (BUY signals only):
                         print(f"✅ Entry complete for {token}")
                         add_console_log(f"✅ {token} position opened successfully", "success")
 
-                        # Log position open
+                        # Log position open (using shared logging utility)
                         try:
-                            import sys
-                            from pathlib import Path
-                            parent_dir = Path(__file__).parent.parent
-                            if str(parent_dir) not in sys.path:
-                                sys.path.insert(0, str(parent_dir))
-                            from trading_app import log_position_open
-                            
                             # Determine position value (with leverage)
                             notional_value = float(amount) * LEVERAGE
                             log_position_open(token, "LONG", notional_value)
@@ -1328,15 +1325,8 @@ Trading Recommendations (BUY signals only):
                             cprint("✅ Short position opened successfully!", "white", "on_green")
                             add_console_log(f"📉 Opened new {token} SHORT position", "success")
 
-                            # Log short position open
+                            # Log short position open (using shared logging utility)
                             try:
-                                import sys
-                                from pathlib import Path
-                                parent_dir = Path(__file__).parent.parent
-                                if str(parent_dir) not in sys.path:
-                                    sys.path.insert(0, str(parent_dir))
-                                from trading_app import log_position_open
-                                
                                 log_position_open(token, "SHORT", position_size)
                             except Exception:
                                 pass
@@ -1387,15 +1377,8 @@ Trading Recommendations (BUY signals only):
                                     if im_in_pos and pos_size != 0:
                                         cprint(f"📊 Confirmed: Position Active (Size: {pos_size})", "green", attrs=["bold"])
                                         
-                                        # Log position open
+                                        # Log position open (using shared logging utility)
                                         try:
-                                            import sys
-                                            from pathlib import Path
-                                            parent_dir = Path(__file__).parent.parent
-                                            if str(parent_dir) not in sys.path:
-                                                sys.path.insert(0, str(parent_dir))
-                                            from trading_app import log_position_open
-                                            
                                             notional_value = float(position_size) * LEVERAGE
                                             log_position_open(token, "LONG", notional_value)
                                         except Exception:
