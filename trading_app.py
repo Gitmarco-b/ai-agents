@@ -2,7 +2,8 @@
 """
 Trading Dashboard Backend - Production Ready
 ============================================
-Fixed memory leaks with rotating logs and bounded JSON files
+Complete version with rotating logs and memory leak fixes
+Perfect Python indentation throughout
 """
 import os
 import sys
@@ -640,6 +641,12 @@ def stop_agent():
         "status": "stopped",
         "message": "Trading agent stopped successfully"
     })
+
+@app.route('/api/status')
+def get_status():
+    """Legacy status endpoint for compatibility"""
+    state = load_agent_state()
+    return jsonify(state)
 
 @app.route('/health')
 def health_check():
