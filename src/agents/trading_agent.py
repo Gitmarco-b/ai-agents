@@ -32,7 +32,6 @@ except Exception:
         print(f"[{level.upper()}] {message}")
 
 
-
 def extract_json_from_text(text):
     """Safely extract JSON object from AI model responses containing text."""
     match = re.search(r"\{.*\}", text, re.DOTALL)
@@ -431,7 +430,6 @@ class TradingAgent:
                 if not clean_key:
                     raise ValueError("Private Key not found in .env")
                 
-                # This is where your error is triggering
                 self.account = Account.from_key(clean_key) 
                 self.address = os.getenv("ACCOUNT_ADDRESS")
                 
@@ -737,13 +735,13 @@ Return ONLY valid JSON with the following structure:
         try:
             response = self.chat_with_ai(POSITION_ANALYSIS_PROMPT, user_prompt)
 
-            # --- Strip Markdown fences if model wrapped response in code blocks ---
+            # Strip Markdown fences if model wrapped response in code blocks
             if "```json" in response:
                 response = response.split("```json")[1].split("```")[0]
             elif "```" in response:
                 response = response.split("```")[1].split("```")[0]
 
-            # --- Try safe JSON extraction first ---
+            # Try safe JSON extraction first
             decisions = extract_json_from_text(response)
             if not decisions:
                 cprint("⚠️ AI response not valid JSON. Attempting text fallback...", "yellow")
@@ -780,7 +778,7 @@ Return ONLY valid JSON with the following structure:
                 cprint(f"   Raw response: {response}", "yellow")
                 return {}
 
-            # --- Print parsed decisions cleanly ---
+            # Print parsed decisions cleanly
             cprint("\n🎯 AI POSITION DECISIONS:", "white", "on_magenta", attrs=["bold"])
             for symbol, decision in decisions.items():
                 action = decision.get("action", "UNKNOWN")
@@ -993,7 +991,7 @@ Return ONLY valid JSON with the following structure:
             )
             return None
 
-def allocate_portfolio(self):
+    def allocate_portfolio(self):
         """Get AI-recommended portfolio allocation"""
         try:
             cprint("\n💰 Calculating optimal portfolio allocation...", "cyan")
@@ -1147,7 +1145,7 @@ Trading Recommendations (BUY signals only):
             traceback.print_exc()
             return None
 
-   def execute_allocations(self, allocation_dict):
+    def execute_allocations(self, allocation_dict):
         """Execute the allocations using AI entry for each position"""
         try:
             print("\n🚀 Executing portfolio allocations...")
@@ -1197,12 +1195,10 @@ Trading Recommendations (BUY signals only):
                             cprint(f"🔵 HyperLiquid: ai_entry({token}, ${amount:.2f}, leverage={LEVERAGE})", "cyan")
                             add_console_log(f"🔵 Executing: ai_entry({token}, ${amount:.2f}, {LEVERAGE}x)", "info")
                             n.ai_entry(token, amount, leverage=LEVERAGE, account=self.account)
-                        
                         elif EXCHANGE == "ASTER":
                             cprint(f"🟣 Aster: ai_entry({token}, ${amount:.2f}, leverage={LEVERAGE})", "cyan")
                             add_console_log(f"🟣 Executing: ai_entry({token}, ${amount:.2f}, {LEVERAGE}x)", "info")
                             n.ai_entry(token, amount, leverage=LEVERAGE)
-                        
                         else:
                             cprint(f"🟢 Solana: ai_entry({token}, ${amount:.2f})", "cyan")
                             add_console_log(f"🟢 Executing: ai_entry({token}, ${amount:.2f})", "info")
@@ -1243,7 +1239,7 @@ Trading Recommendations (BUY signals only):
             print(error_msg)
             add_console_log(error_msg, "error")
             print("🔧 Check the logs and try again!")
-            
+
     def handle_exits(self):
         """Check and exit positions based on SELL recommendations"""
         import inspect
@@ -1280,7 +1276,7 @@ Trading Recommendations (BUY signals only):
                         else:
                             n.chunk_kill(token, max_usd_order_size, slippage)
                         cprint("✅ Position closed successfully!", "white", "on_green")
-                        add_console_log(f"Closed {token} position due to signal", "info")
+                        add_console_log(f"Closed {token} position due to signal", "warning")
 
                     except Exception as e:
                         cprint(f"❌ Error closing position: {str(e)}", "white", "on_red")
@@ -1389,7 +1385,6 @@ Trading Recommendations (BUY signals only):
 
                                     if im_in_pos and pos_size != 0:
                                         cprint(f"📊 Confirmed: Position Active (Size: {pos_size})", "green", attrs=["bold"])
-                                        add_console_log(f"Confirmed: Position Active (Size: {pos_size})", "info")
                                         
                                         # Log position open
                                         try:
@@ -1412,11 +1407,9 @@ Trading Recommendations (BUY signals only):
 
                             else:
                                 cprint("❌ Position not opened (check errors above)", "white", "on_red")
-                                add_console_log("❌ Position not opened (check errors above)", "warning")
                                 
                         except Exception as e:
                             cprint(f"❌ Error opening position: {str(e)}", "white", "on_red")
-                            add_console_log(f"❌ Error opening position: {str(e)}", "warning")
 
     def show_final_portfolio_report(self):
         """Display final portfolio status - NO LOOPS, just a snapshot"""
@@ -1470,7 +1463,7 @@ Trading Recommendations (BUY signals only):
             add_console_log(f"🔄 TRADING CYCLE STARTED", "info")
 
             # STEP 1: FETCH ALL OPEN POSITIONS
-            add_console_log("Fetching open positions...", "info")  
+            add_console_log("Fetching open positions...", "info")
             open_positions = self.fetch_all_open_positions()
             add_console_log(f"Found {len(open_positions)} open position(s)", "info")
 
@@ -1480,7 +1473,7 @@ Trading Recommendations (BUY signals only):
             else:
                 tokens_to_trade = MONITORED_TOKENS
                 
-            add_console_log("📊 Collecting market data for analysis...", "info")
+            add_console_log(f"📊 Collecting market data for {len(tokens_to_trade)} tokens...", "info")
             
             cprint("📊 Collecting market data for analysis...", "white", "on_blue")
             market_data = collect_all_tokens(
@@ -1513,7 +1506,6 @@ Trading Recommendations (BUY signals only):
             cprint("\n📈 Analyzing tokens for new entry opportunities...", "white", "on_blue")
             for token, data in market_data.items():
                 cprint(f"\n🤖 Analyzing {token}...", "white", "on_green")
-                
                 add_console_log(f"🤖 Analyzing {token}...", "info")
 
                 if strategy_signals and token in strategy_signals:
@@ -1555,10 +1547,10 @@ Trading Recommendations (BUY signals only):
 
             cprint(f"\n{'=' * 80}", "cyan")
             cprint("✅ TRADING CYCLE COMPLETE", "white", "on_green", attrs=["bold"])
-            add_console_log("Trading cycle complete", "success")
+            add_console_log("✅ Trading cycle complete", "success")
             cprint(f"{'=' * 80}\n", "cyan")
 
-            # --- Display Account Balance and Invested Totals ---
+            # Display Account Balance and Invested Totals
             try:
                 account_balance = get_account_balance(self.account)
             except Exception as e:
@@ -1602,7 +1594,7 @@ def main():
             next_run = datetime.now() + timedelta(minutes=SLEEP_BETWEEN_RUNS_MINUTES)
             cprint(f"\n⏰ Next cycle at UTC: {next_run.strftime('%d-%m-%Y %H:%M:%S')}", "white", "on_green")
             time.sleep(SLEEP_BETWEEN_RUNS_MINUTES * 60)
-            add_console_log(f"Next cycle in {timedelta(minutes=SLEEP_BETWEEN_RUNS_MINUTES)} minutes", "info")
+            add_console_log(f"Next cycle in {SLEEP_BETWEEN_RUNS_MINUTES} minutes", "info")
             
         except KeyboardInterrupt:
             cprint("\n👋 AI Agent shutting down gracefully...", "white", "on_blue")
