@@ -598,9 +598,9 @@ def run_trading_agent():
             
             # Get tokens list
             if EXCHANGE in ["ASTER", "HYPERLIQUID"]:
-                from trading_agent import SYMBOLS as tokens
+                from src.agents.trading_agent import SYMBOLS as tokens
             else:
-                from trading_agent import MONITORED_TOKENS as tokens
+                from src.agents.trading_agent import MONITORED_TOKENS as tokens
             
             # Log analysis start
             add_console_log(f"🤖 Analyzing {len(tokens)} tokens", "info")
