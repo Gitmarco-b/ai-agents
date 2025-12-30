@@ -426,7 +426,7 @@ def calculate_position_size(account_balance):
 
 class TradingAgent:
     def __init__(self):
-    self.account = None
+       self.account = None
     if EXCHANGE == "HYPERLIQUID":
         cprint("🔑 Initializing Hyperliquid Account...", "cyan")
         try:
