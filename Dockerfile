@@ -1,39 +1,33 @@
-# Use a slim official Python image
-FROM python:3.11-slim
+# Use the version used during development
+FROM python:3.10-slim
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     libpq-dev \
+    # Added for some numerical/trading library support
+    llvm \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Keep python quiet and unbuffered (good for logs)
+# Keep python quiet and unbuffered for real-time dashboard logs
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Copy and install dependencies first to benefit from docker cache
-COPY requirements.txt /app/requirements.txt
-RUN pip install -r /app/requirements.txt
+# Install requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy full repo
-COPY . /app
+# Copy repo (ensure .env is in .dockerignore)
+COPY . .
 
-# Create agent_data directories (for logs, data, temp)
-RUN mkdir -p /app/agent_data/logs /app/agent_data/data /app/agent_data/temp
+# Create the EXACT directory the code expects for data [3, 4]
+RUN mkdir -p /app/src/data
 
-# Expose port
+# Expose the dashboard port [6]
 EXPOSE 5000
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    libpq-dev \
-    llvm-11 \
-    llvm-11-dev \
- && rm -rf /var/lib/apt/lists/*
-
-# FIXED: Correct path to trading_app.py (in root, not main/)
+# Entry point for the dashboard backend
 CMD ["python", "trading_app.py"]
