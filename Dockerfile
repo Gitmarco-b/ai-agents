@@ -27,5 +27,13 @@ RUN mkdir -p /app/agent_data/logs /app/agent_data/data /app/agent_data/temp
 # Expose port
 EXPOSE 5000
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    libpq-dev \
+    llvm-11 \
+    llvm-11-dev \
+ && rm -rf /var/lib/apt/lists/*
+
 # FIXED: Correct path to trading_app.py (in root, not main/)
 CMD ["python", "trading_app.py"]
