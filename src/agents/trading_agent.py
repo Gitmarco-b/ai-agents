@@ -31,6 +31,7 @@ except Exception:
     def add_console_log(message, level="info"):
         print(f"[{level.upper()}] {message}")
 
+
 def log_and_print(message, level="info"):
     """Show message in terminal and dashboard console"""
     print(message, flush=True)
@@ -146,7 +147,7 @@ from eth_account import Account
 EXCHANGE = "HYPERLIQUID"  # Options: "ASTER", "HYPERLIQUID", "SOLANA"
 
 # 🌊 AI MODE SELECTION
-USE_SWARM_MODE = False # True = Swarm Mode (all Models), False = Single Model
+USE_SWARM_MODE = False  # True = Swarm Mode (all Models), False = Single Model
 
 # 📈 TRADING MODE SETTINGS
 LONG_ONLY = False 
@@ -419,6 +420,7 @@ def calculate_position_size(account_balance):
         cprint(f"   💎 Position Size: ${position_size:,.2f}", "cyan", attrs=['bold'])
 
         return position_size
+
 
 # ============================================================================
 # TRADING AGENT CLASS
@@ -795,7 +797,6 @@ Return ONLY valid JSON with the following structure:
                 cprint(f"   {symbol:<10} → {action:<6} | {reason}", color)
                 log_and_print(f"AI Decision → {symbol}: {action} | {reason}", "info")
 
-
             cprint("=" * 60 + "\n", "yellow")
             return decisions
 
@@ -826,7 +827,7 @@ Return ONLY valid JSON with the following structure:
 
                     cprint(f"✅ {symbol} position closed successfully", "green", attrs=["bold"])
                     log_and_print(f"✅ Closed {symbol} | Reason: {decision['reasoning']}", "success")
-                   
+                    
                     closed_count += 1
                     time.sleep(2)
 
@@ -1085,17 +1086,19 @@ Trading Recommendations (BUY signals only):
                 allocations[USDC_ADDRESS] = amount
 
             # --- Validate and normalize allocations ---
-            valid_allocations = {k: float(v) for k, v in allocations.items()
-                                if isinstance(v, (int, float, str)) and str(v).replace('.', '', 1).isdigit()}
+            valid_allocations = {
+                k: float(v) for k, v in allocations.items()
+                if isinstance(v, (int, float, str)) and str(v).replace('.', '', 1).isdigit()
+            }
             total_margin = sum(valid_allocations.values())
             target_margin = account_balance * (MAX_POSITION_PERCENTAGE / 100)
-        
+            
             # --- Scale allocations to use 90% of equity ---
             if total_margin > 0:
                 scale_factor = target_margin / total_margin
                 for k in valid_allocations.keys():
                     valid_allocations[k] = round(valid_allocations[k] * scale_factor, 2)
-        
+            
             # --- Enforce minimum trade size (≥ $12 notional) ---
             min_margin = 12 / LEVERAGE
             adjusted = False
@@ -1106,7 +1109,7 @@ Trading Recommendations (BUY signals only):
                     cprint(f"⚠️ Raising {k} from ${v:.2f} to minimum ${min_margin:.2f}", "yellow")
                     valid_allocations[k] = round(min_margin, 2)
                     adjusted = True
-        
+            
             # --- Rebalance if any raises occurred ---
             if adjusted:
                 total_margin = sum(v for k, v in valid_allocations.items() if k != USDC_ADDRESS)
@@ -1114,7 +1117,7 @@ Trading Recommendations (BUY signals only):
                 for k in valid_allocations.keys():
                     if k != USDC_ADDRESS:
                         valid_allocations[k] = round(valid_allocations[k] * scale_factor, 2)
-        
+            
             allocations = valid_allocations
 
             # --- Pretty print allocation ---
@@ -1172,7 +1175,6 @@ Trading Recommendations (BUY signals only):
                         print(f"✅ Entry complete for {token}")
                         log_and_print(f"🚀 Opened new {token} position for ${amount:.2f}", "success")
 
-                    
                         # Log position open
                         try:
                             import sys
@@ -1286,7 +1288,6 @@ Trading Recommendations (BUY signals only):
                             cprint("✅ Short position opened successfully!", "white", "on_green")
                             log_and_print(f"📉 Opened new {token} SHORT position", "success")
 
-                            
                             # Log short position open
                             try:
                                 import sys
@@ -1332,7 +1333,6 @@ Trading Recommendations (BUY signals only):
                                 cprint("✅ LONG Position opened successfully!", "white", "on_green")
                                 log_and_print(f"📈 Opened new {token} LONG position", "success")
 
-                                
                                 time.sleep(2)
 
                                 # Verify position
@@ -1411,7 +1411,6 @@ Trading Recommendations (BUY signals only):
 
     def run(self):
         """Run the trading agent (implements BaseAgent interface)"""
-        # 'self' is valid here because this is a class method
         self.run_trading_cycle()
 
     def run_trading_cycle(self, strategy_signals=None):
@@ -1461,7 +1460,6 @@ Trading Recommendations (BUY signals only):
             for token, data in market_data.items():
                 cprint(f"\n🤖 Analyzing {token}...", "white", "on_green")
                 log_and_print(f"\n🤖 Analyzing {token}...", "info")
-
 
                 if strategy_signals and token in strategy_signals:
                     data["strategy_signals"] = strategy_signals[token]
