@@ -134,7 +134,7 @@ def get_cached_or_fetch(cache_key, fetch_function):
 # ============================================================================
 EXCHANGE_CONNECTED = False
 try:
-    import nice_funcs_hyperliquid as n
+    from src import nice_funcs_hyperliquid as n
     from eth_account import Account
     
     def _get_account():
