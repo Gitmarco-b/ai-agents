@@ -1050,8 +1050,37 @@ Return ONLY valid JSON with the following structure:
             else:
                 available_tokens = MONITORED_TOKENS
 
-            # AI prompt for allocation
-            allocation_prompt = f"""You are our Portfolio Allocation AI 🌙
+            # AI prompt for allocation (different format for exchanges vs Solana)
+            if EXCHANGE in ["ASTER", "HYPERLIQUID"]:
+                # For centralized exchanges: use SYMBOLS (BTC, ETH, SOL)
+                allocation_prompt = f"""You are our Portfolio Allocation AI 🌙
+
+Given:
+- Total portfolio size: ${account_balance}
+- Maximum position size: ${max_position_size} ({MAX_POSITION_PERCENTAGE}% of total)
+- Minimum cash buffer: {CASH_PERCENTAGE}%
+- Available symbols: {available_tokens}
+- Exchange: {EXCHANGE}
+
+Provide a portfolio allocation that:
+1. Never exceeds max position size per token
+2. Maintains minimum cash buffer
+3. Returns allocation as a JSON object with SYMBOL NAMES as keys and USD amounts as values
+4. Use EXACT symbol names from the available symbols list (e.g., "BTC", "ETH", "SOL")
+5. For cash allocation, use "{USDC_ADDRESS}" as the key
+
+Example format:
+{{
+    "BTC": 25.50,
+    "ETH": 30.00,
+    "SOL": 15.25,
+    "{USDC_ADDRESS}": 5.00
+}}
+
+CRITICAL: Use SYMBOL NAMES (like "BTC", "ETH", "SOL"), NOT addresses!"""
+            else:
+                # For Solana: use token addresses
+                allocation_prompt = f"""You are our Portfolio Allocation AI 🌙
 
 Given:
 - Total portfolio size: ${account_balance}
