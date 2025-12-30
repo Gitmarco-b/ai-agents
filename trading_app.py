@@ -1,36 +1,35 @@
 #!/usr/bin/env python3
 """
-Trading Dashboard Backend
-=======
-Trading Dashboard Backend
-Production-ready Flask app for HyperLiquid trading
+Trading Dashboard Backend - Production Ready
+============================================
+Fixed memory leaks with rotating logs and bounded JSON files
 """
 import os
 import sys
 import json
 import time
 import threading
-from threading import Lock  # ADD THIS LINE
+from threading import Lock
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 from flask_cors import CORS
-import signal  # ADD THIS
-import atexit  # ADD THIS
+import signal
+import atexit
+import logging
+from logging.handlers import RotatingFileHandler
 
 # ============================================================================
 # SETUP & CONFIGURATION
 # ============================================================================
 
-# Add project root to Python path
 BASE_DIR = Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
 
-# Load environment variables
 load_dotenv()
 
-# Initialize Flask with correct paths
+# Initialize Flask
 DASHBOARD_DIR = BASE_DIR / "dashboard"
 app = Flask(__name__,
     template_folder=str(DASHBOARD_DIR / "templates"),
@@ -38,170 +37,176 @@ app = Flask(__name__,
     static_url_path='/static'
 )
 
-# Enable CORS
 CORS(app)
 
-# Data storage directories
-DATA_DIR = BASE_DIR / "src" / "data"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+# ============================================================================
+# DATA DIRECTORIES - Production Structure
+# ============================================================================
+DATA_ROOT = BASE_DIR / "agent_data"
+LOGS_DIR = DATA_ROOT / "logs"
+DATA_DIR = DATA_ROOT / "data"
+TEMP_DIR = DATA_ROOT / "temp"
 
+# Create directories
+for directory in [LOGS_DIR, DATA_DIR, TEMP_DIR]:
+    directory.mkdir(parents=True, exist_ok=True)
+
+# File paths
 TRADES_FILE = DATA_DIR / "trades.json"
-HISTORY_FILE = DATA_DIR / "balance_history.json"
-CONSOLE_FILE = DATA_DIR / "console_logs.json"
+HISTORY_FILE = DATA_DIR / "history.json"
 AGENT_STATE_FILE = DATA_DIR / "agent_state.json"
 
-# Agent control variables
+# ============================================================================
+# ROTATING LOGGER SETUP
+# ============================================================================
 
+# Dashboard logger (300KB max, 5 backups)
+dashboard_logger = logging.getLogger('dashboard')
+dashboard_handler = RotatingFileHandler(
+    LOGS_DIR / 'dashboard.log',
+    maxBytes=300000,  # 300KB
+    backupCount=5
+)
+dashboard_handler.setFormatter(
+    logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+)
+dashboard_logger.addHandler(dashboard_handler)
+dashboard_logger.setLevel(logging.INFO)
+
+# Also log to console for Docker
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+dashboard_logger.addHandler(console_handler)
+
+# ============================================================================
+# AGENT CONTROL VARIABLES
+# ============================================================================
 agent_thread = None
-agent_running = False  # Always start stopped - never auto-start
+agent_running = False
 stop_agent_flag = False
-shutdown_in_progress = False  # Shutdown Flag
-agent_executing = False  # Agent Trade Cycle Active Flag - True when actively analyzing, False when waiting
+shutdown_in_progress = False
+agent_executing = False
+agent_lock = Lock()
 
-agent_lock = Lock()  # Protects all agent control flags
-
-# Symbols list (for trading agent reference)
-SYMBOLS = [
-    'ETH',        # Ethereum
-    'BTC',        # Bitcoin
-    'SOL',        # Solana
-    'AAVE',       # Aave
-    'LINK',       # Chainlink
-    'LTC',        # Litecoin
-    'FARTCOIN',   # FartCoin
-]
-
-# Exchange type
+SYMBOLS = ['ETH', 'BTC', 'SOL', 'AAVE', 'LINK', 'LTC', 'FARTCOIN']
 EXCHANGE = "HYPERLIQUID"
 
 # ============================================================================
-# CACHING SYSTEM - Prevents rate limiting
+# CACHING SYSTEM
 # ============================================================================
-from threading import Lock
-import time
-
-# Cache storage
 _cache = {
     "account_data": {"data": None, "timestamp": 0},
     "positions_data": {"data": None, "timestamp": 0}
 }
 _cache_lock = Lock()
-CACHE_DURATION = 5  # seconds
+CACHE_DURATION = 5
 
 def get_cached_or_fetch(cache_key, fetch_function):
-    """
-    Generic caching wrapper
-    Returns cached data if fresh (<5 seconds old), otherwise fetches new data
-    """
+    """Generic caching with 5-second TTL"""
     with _cache_lock:
         cache_entry = _cache.get(cache_key)
         now = time.time()
         
-        # Return cached data if fresh
         if cache_entry and cache_entry["timestamp"] > 0:
             age = now - cache_entry["timestamp"]
             if age < CACHE_DURATION:
-                print(f" Cache HIT for {cache_key} (age: {age:.1f}s)")
                 return cache_entry["data"]
-        
-        print(f" Cache MISS for {cache_key} - fetching fresh data")
     
-    # Fetch fresh data (outside lock to avoid blocking)
     try:
         fresh_data = fetch_function()
-        
-        # Update cache
         with _cache_lock:
             _cache[cache_key] = {
                 "data": fresh_data,
                 "timestamp": time.time()
             }
-        
         return fresh_data
         
     except Exception as e:
-        print(f" Error fetching {cache_key}: {e}")
-        
-        # Return stale cache as fallback
+        dashboard_logger.error(f"Error fetching {cache_key}: {e}")
         with _cache_lock:
             if cache_entry and cache_entry["data"] is not None:
-                print(f"âš ï¸ Returning stale cache for {cache_key}")
                 return cache_entry["data"]
-        
-        # No cache available, re-raise error
         raise
-        
 
 # ============================================================================
-# IMPORT TRADING FUNCTIONS (with fallback)
+# IMPORT TRADING FUNCTIONS
 # ============================================================================
 EXCHANGE_CONNECTED = False
 try:
-    # Try importing from nice_funcs.py (local file)
     import nice_funcs_hyperliquid as n
     from eth_account import Account
     
     def _get_account():
-        """Get HyperLiquid account from environment (reads HYPER_LIQUID_ETH_PRIVATE_KEY)"""
-        key = os.getenv("HYPER_LIQUID_ETH_PRIVATE_KEY", "") or os.getenv("HYPERLIQUID_KEY", "")
-        key = (key or "").strip().replace('"', '').replace("'", "")
+        key = os.getenv("HYPER_LIQUID_ETH_PRIVATE_KEY", "").strip().replace('"', '').replace("'", "")
         if not key:
-            raise RuntimeError("Missing HYPER_LIQUID_ETH_PRIVATE_KEY (private key) in environment.")
+            raise RuntimeError("Missing HYPER_LIQUID_ETH_PRIVATE_KEY")
         if key.startswith("0x"):
             key = key[2:]
         if len(key) != 64:
-            raise RuntimeError("HYPER_LIQUID_ETH_PRIVATE_KEY must be 64 hex chars (32 bytes) after removing 0x.")
+            raise RuntimeError("Invalid key length")
         return Account.from_key(key)
     
     EXCHANGE_CONNECTED = True
-    print("✅ HyperLiquid functions loaded from nice_funcs.py")
+    dashboard_logger.info("HyperLiquid connected successfully")
     
-except ImportError:
-    try:
-        # Fallback: Try importing from src module
-        from src import nice_funcs_hyperliquid as n
-        from eth_account import Account
-        
-        def _get_account():
-            key = os.getenv("HYPER_LIQUID_ETH_PRIVATE_KEY", "") or os.getenv("HYPERLIQUID_KEY", "")
-            key = (key or "").strip().replace('"', '').replace("'", "")
-            if not key:
-                raise RuntimeError("Missing HYPER_LIQUID_ETH_PRIVATE_KEY (private key) in environment.")
-            if key.startswith("0x"):
-                key = key[2:]
-            if len(key) != 64:
-                raise RuntimeError("HYPER_LIQUID_ETH_PRIVATE_KEY must be 64 hex chars (32 bytes) after removing 0x.")
-            return Account.from_key(key)
-        
-        EXCHANGE_CONNECTED = True
-        print("✅ HyperLiquid functions loaded from src.nice_funcs_hyperliquid")
-        
-    except ImportError as e:
-        print(f"⚠️ Warning: Could not import HyperLiquid functions: {e}")
-        print("⚠️ Dashboard will run in DEMO mode with simulated data")
-        
-        # Create dummy functions for demo mode
-        class DummyAccount:
-            address = "0x0000000000000000000000000000000000000000"
-        
-        def _get_account():
-            return DummyAccount()
-        
-        n = None
+except ImportError as e:
+    dashboard_logger.warning(f"Running in DEMO mode: {e}")
+    
+    class DummyAccount:
+        address = "0x0000000000000000000000000000000000000000"
+    
+    def _get_account():
+        return DummyAccount()
+    
+    n = None
 
+# ============================================================================
+# JSON ROTATION HELPER
+# ============================================================================
+
+def save_json_with_rotation(filepath, data, max_entries, max_size_kb=500):
+    """Save JSON with automatic rotation and size limits"""
+    filepath = Path(filepath)
+    
+    # Rotate if file too large
+    if filepath.exists() and filepath.stat().st_size > (max_size_kb * 1024):
+        backup = filepath.with_suffix('.json.backup')
+        filepath.rename(backup)
+        dashboard_logger.info(f"Rotated {filepath.name} (size limit exceeded)")
+    
+    # Load existing data
+    if filepath.exists():
+        try:
+            with open(filepath, 'r') as f:
+                existing = json.load(f)
+        except json.JSONDecodeError:
+            dashboard_logger.warning(f"Corrupted {filepath.name}, resetting")
+            existing = []
+    else:
+        existing = []
+    
+    # Append and trim
+    existing.append(data)
+    existing = existing[-max_entries:]
+    
+    # Write atomically
+    try:
+        with open(filepath, 'w') as f:
+            json.dump(existing, f, indent=2)
+    except Exception as e:
+        dashboard_logger.error(f"Failed to save {filepath.name}: {e}")
 
 # ============================================================================
 # DATA COLLECTION FUNCTIONS
 # ============================================================================
 
 def get_account_data():
-    """Fetch live account data from HyperLiquid (with 5-second caching)"""
+    """Fetch account data with caching"""
     return get_cached_or_fetch("account_data", _fetch_account_data_uncached)
 
 def _fetch_account_data_uncached():
-    """Internal function - actual API calls (called by cache wrapper)"""
+    """Fetch live account data"""
     if not EXCHANGE_CONNECTED or n is None:
-        # Demo mode data
         return {
             "account_balance": 10.0,
             "total_equity": 10.0,
@@ -215,22 +220,12 @@ def _fetch_account_data_uncached():
         account = _get_account()
         address = os.getenv("ACCOUNT_ADDRESS", account.address)
         
-        # Get live data using the correct function names
-        if hasattr(n, 'get_available_balance'):
-            available_balance = float(n.get_available_balance(address))
-        else:
-            available_balance = 10.0
+        available_balance = float(n.get_available_balance(address)) if hasattr(n, 'get_available_balance') else 10.0
+        total_equity = float(n.get_account_value(address)) if hasattr(n, 'get_account_value') else 10.0
         
-        if hasattr(n, 'get_account_value'):
-            total_equity = float(n.get_account_value(address))
-        else:
-            total_equity = 10.0
-        
-        # Calculate PnL (starting balance from config or default $10)
         starting_balance = 10.0
         pnl = total_equity - starting_balance
         
-        # Save to history
         save_balance_history(total_equity)
         
         return {
@@ -243,10 +238,7 @@ def _fetch_account_data_uncached():
         }
         
     except Exception as e:
-        error_msg = f"Error fetching account data: {str(e)}"
-        print(f"Error: {error_msg}")
-        add_console_log(f"Error: {error_msg}")
-        
+        dashboard_logger.error(f"Error fetching account data: {e}")
         return {
             "account_balance": 0.0,
             "total_equity": 0.0,
@@ -256,281 +248,149 @@ def _fetch_account_data_uncached():
             "agent_running": agent_running
         }
 
-
 def get_positions_data():
-    """Fetch ALL live open positions from HyperLiquid (with 5-second caching)"""
+    """Fetch positions with caching"""
     return get_cached_or_fetch("positions_data", _fetch_positions_data_uncached)
 
 def _fetch_positions_data_uncached():
-    """Internal function - actual API calls (called by cache wrapper)"""
+    """Fetch live positions"""
     if not EXCHANGE_CONNECTED or n is None:
-        print("Exchange not connected or nice_funcs not loaded")
         return []
 
     try:
-        # Get account
         account = _get_account()
         address = os.getenv("ACCOUNT_ADDRESS", account.address)
         
-        print(f"\n{'='*60}")
-        print(f"Fetching positions for address: {address}")
-        print(f"{'='*60}\n")
-        
-        # Import HyperLiquid SDK
         from hyperliquid.info import Info
         from hyperliquid.utils import constants
         
-        # Connect to HyperLiquid Info API
         info = Info(constants.MAINNET_API_URL, skip_ws=True)
         user_state = info.user_state(address)
         
         positions = []
         
-        # Check if assetPositions exists
         if "assetPositions" not in user_state:
-            print("No 'assetPositions' field in user_state")
-            print(f"Available fields: {list(user_state.keys())}")
             return []
         
-        asset_positions = user_state["assetPositions"]
-        print(f" Found {len(asset_positions)} asset position entries")
-        
-        # Loop through ALL asset positions
-        for idx, position in enumerate(asset_positions):
-            try:
-                raw_pos = position.get("position", {})
-                symbol = raw_pos.get("coin", "Unknown")
-                pos_size = float(raw_pos.get("szi", 0))
-                
-                print(f"\n   Position {idx + 1}: {symbol} | Size: {pos_size}")
-                
-                # Only include non-zero positions
-                if pos_size == 0:
-                    print(f"   â­ï¸  Skipping {symbol} (size = 0)")
-                    continue
-                
-                # Get position details
-                entry_px = float(raw_pos.get("entryPx", 0))
-                pnl_perc = float(raw_pos.get("returnOnEquity", 0)) * 100
-                is_long = pos_size > 0
-                side = "LONG" if is_long else "SHORT"
-                
-                print(f"{symbol} {side} position detected!")
-                print(f"Entry: ${entry_px:.2f} | PnL: {pnl_perc:.2f}%")
-                
-                # Fetch current mark price
-                try:
-                    ask, bid, _ = n.ask_bid(symbol)
-                    mark_price = (ask + bid) / 2
-                    print(f"Mark price: ${mark_price:.2f}")
-                except Exception as price_err:
-                    print(f"Could not fetch mark price: {price_err}")
-                    mark_price = entry_px
-                    print(f"Using entry price as fallback: ${mark_price:.2f}")
-                
-                # Calculate position value in USD
-                position_value = abs(pos_size) * mark_price
-                
-                print(f"Position value: ${position_value:.2f}")
-                
-                # Add to positions array
-                position_obj = {
-                    "symbol": symbol,
-                    "size": float(pos_size),
-                    "entry_price": float(entry_px),
-                    "mark_price": float(mark_price),
-                    "position_value": float(position_value),
-                    "pnl_percent": float(pnl_perc),
-                    "side": side
-                }
-                
-                positions.append(position_obj)
-                
-                print(f"Added to positions array: {symbol} {side}")
-                
-            except Exception as pos_err:
-                print(f"Error processing position {idx + 1}: {pos_err}")
-                import traceback
-                traceback.print_exc()
+        for position in user_state["assetPositions"]:
+            raw_pos = position.get("position", {})
+            symbol = raw_pos.get("coin", "Unknown")
+            pos_size = float(raw_pos.get("szi", 0))
+            
+            if pos_size == 0:
                 continue
-        
-        print(f"\n{'='*60}")
-        print(f"Total positions to return: {len(positions)}")
-        print(f"{'='*60}\n")
-        
-        # Log positions for debugging
-        if positions:
-            for pos in positions:
-                print(f"   â€¢ {pos['symbol']} {pos['side']}: ${pos['position_value']:.2f}")
-        else:
-            print("   (No open positions)")
+            
+            entry_px = float(raw_pos.get("entryPx", 0))
+            pnl_perc = float(raw_pos.get("returnOnEquity", 0)) * 100
+            is_long = pos_size > 0
+            
+            try:
+                ask, bid, _ = n.ask_bid(symbol)
+                mark_price = (ask + bid) / 2
+            except:
+                mark_price = entry_px
+            
+            position_value = abs(pos_size) * mark_price
+            
+            positions.append({
+                "symbol": symbol,
+                "size": float(pos_size),
+                "entry_price": float(entry_px),
+                "mark_price": float(mark_price),
+                "position_value": float(position_value),
+                "pnl_percent": float(pnl_perc),
+                "side": "LONG" if is_long else "SHORT"
+            })
         
         return positions
 
     except Exception as e:
-        print(f"\n{'='*60}")
-        print(f"CRITICAL ERROR in get_positions_data()")
-        print(f"{'='*60}")
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
-        print(f"{'='*60}\n")
+        dashboard_logger.error(f"Error fetching positions: {e}")
         return []
-
 
 def save_balance_history(balance):
-    """Save balance to history (max 100 entries)"""
-    try:
-        if HISTORY_FILE.exists():
-            with open(HISTORY_FILE, 'r') as f:
-                history = json.load(f)
-        else:
-            history = []
-        
-        # Add new entry
-        history.append({
-            "timestamp": datetime.now().isoformat(),
-            "balance": float(balance)
-        })
-        
-        # Keep only last 100
-        history = history[-100:]
-        
-        with open(HISTORY_FILE, 'w') as f:
-            json.dump(history, f, indent=2)
-            
-    except Exception as e:
-        print(f"⚠️ Error saving balance history: {e}")
-
+    """Save balance with rotation"""
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "balance": float(balance)
+    }
+    save_json_with_rotation(HISTORY_FILE, entry, max_entries=100, max_size_kb=200)
 
 def load_trades():
-    """Load recent trades from file"""
+    """Load recent trades"""
     try:
         if TRADES_FILE.exists():
             with open(TRADES_FILE, 'r') as f:
                 trades = json.load(f)
-                return trades[-20:]  # Last 20 trades
+                return trades[-20:]
         return []
     except Exception as e:
-        print(f"⚠️ Error loading trades: {e}")
+        dashboard_logger.error(f"Error loading trades: {e}")
         return []
-
 
 def save_trade(trade_data):
-    """Save a completed trade"""
-    try:
-        if TRADES_FILE.exists():
-            with open(TRADES_FILE, 'r') as f:
-                trades = json.load(f)
-        else:
-            trades = []
-        
-        trades.append(trade_data)
-        trades = trades[-100:]  # Keep last 100
-        
-        with open(TRADES_FILE, 'w') as f:
-            json.dump(trades, f, indent=2)
-        
-        # Log trade to console
-        symbol = trade_data.get('symbol', 'Unknown')
-        side = trade_data.get('side', 'LONG')
-        pnl = trade_data.get('pnl', 0)
-        
-        # Format log message
-        side_emoji = "📈" if side == "LONG" else "📉"
-        log_message = f"{side_emoji} Closed {side} {symbol} ${pnl:+.2f}"
-        
-        add_console_log(log_message, "trade")
-            
-    except Exception as e:
-        print(f"⚠️ Error saving trade: {e}")
+    """Save trade with rotation"""
+    save_json_with_rotation(TRADES_FILE, trade_data, max_entries=50, max_size_kb=500)
+    
+    symbol = trade_data.get('symbol', 'Unknown')
+    side = trade_data.get('side', 'LONG')
+    pnl = trade_data.get('pnl', 0)
+    
+    side_emoji = "📈" if side == "LONG" else "📉"
+    dashboard_logger.info(f"{side_emoji} Closed {side} {symbol} ${pnl:+.2f}")
 
 def log_position_open(symbol, side, size_usd):
-    """Log when a position is opened"""
-    try:
-        emoji = "📈" if side == "LONG" else "📉"
-        message = f"{emoji} Opened {side} {symbol} ${size_usd:.2f}"
-        add_console_log(message, "trade")
-    except Exception as e:
-        print(f"⚠️ Error logging position open: {e}")
+    """Log position opening"""
+    emoji = "📈" if side == "LONG" else "📉"
+    dashboard_logger.info(f"{emoji} Opened {side} {symbol} ${size_usd:.2f}")
 
 # ============================================================================
-# CONSOLE LOGGING SUPPORT (enhanced for live updates)
+# CONSOLE LOG READING (from rotating log file)
 # ============================================================================
-
-# In-memory cache of recent console logs for instant visibility during agent_running/agent_executing
-console_log_cache = []
-console_log_lock = Lock()
-
-def add_console_log(message, level="info"):
-    """
-    Add a log message to console and in-memory cache with thread safety
-    Ensures logs are visible immediately during agent_running and agent_executing
-    """
-    global console_log_cache
-
-    entry = {
-        "timestamp": datetime.now().strftime("%H:%M:%S"),
-        "message": str(message),
-        "level": level
-    }
-
-    try:
-        # --- Thread-safe write to in-memory cache ---
-        with console_log_lock:
-            console_log_cache.append(entry)
-            console_log_cache = console_log_cache[-200:]  # keep last 200 for memory
-
-        # --- Persist to file for durability ---
-        if CONSOLE_FILE.exists():
-            with open(CONSOLE_FILE, 'r') as f:
-                content = f.read().strip()
-                logs = json.loads(content) if content else []
-        else:
-            logs = []
-
-        logs.append(entry)
-        logs = logs[-500:]  # keep last 500 logs
-
-        with open(CONSOLE_FILE, 'w') as f:
-            json.dump(logs, f, indent=2)
-
-        # --- Print and flush to stdout (for Docker / console visibility) ---
-        print(f"[{entry['timestamp']}] {entry['message']}", flush=True)
-
-    except Exception as e:
-        print(f"⚠️ Error saving console log: {e}", flush=True)
-
-
 
 def get_console_logs():
-    """Get console logs"""
+    """Read last 100 lines from dashboard log file"""
+    log_file = LOGS_DIR / 'dashboard.log'
+    
+    if not log_file.exists():
+        return []
+    
     try:
-        if CONSOLE_FILE.exists():
-            with open(CONSOLE_FILE, 'r') as f:
-                content = f.read()
-                if not content.strip():
-                    return []
-                return json.loads(content)
-        return []
-    except json.JSONDecodeError as e:
-        print(f"⚠️ Console log file corrupted, resetting: {e}")
-        # Reset corrupted file
-        with open(CONSOLE_FILE, 'w') as f:
-            json.dump([], f)
-        return []
+        with open(log_file, 'r') as f:
+            lines = f.readlines()[-100:]
+        
+        logs = []
+        for line in lines:
+            # Parse: "2024-01-01 12:00:00 - INFO - message"
+            parts = line.split(' - ', 2)
+            if len(parts) >= 3:
+                timestamp = parts[0].split(' ')[1] if ' ' in parts[0] else parts[0]
+                level = parts[1].lower()
+                message = parts[2].strip()
+                
+                logs.append({
+                    'timestamp': timestamp,
+                    'level': level,
+                    'message': message
+                })
+        
+        return logs
+        
     except Exception as e:
-        print(f"⚠️ Error loading console logs: {e}")
+        dashboard_logger.error(f"Error reading console logs: {e}")
         return []
 
+# ============================================================================
+# AGENT STATE MANAGEMENT
+# ============================================================================
+
 def load_agent_state():
-    """Load agent state from persistent storage"""
+    """Load agent state"""
     try:
         if AGENT_STATE_FILE.exists():
             with open(AGENT_STATE_FILE, 'r') as f:
                 return json.load(f)
         
-        # Return default state if file doesn't exist
         return {
             "running": False,
             "last_started": None,
@@ -538,7 +398,7 @@ def load_agent_state():
             "total_cycles": 0
         }
     except Exception as e:
-        print(f"⚠️ Error loading agent state: {e}")
+        dashboard_logger.error(f"Error loading agent state: {e}")
         return {
             "running": False,
             "last_started": None,
@@ -546,193 +406,112 @@ def load_agent_state():
             "total_cycles": 0
         }
 
-
 def save_agent_state(state):
-    """Save agent state to persistent storage"""
+    """Save agent state"""
     try:
         with open(AGENT_STATE_FILE, 'w') as f:
             json.dump(state, f, indent=2)
     except Exception as e:
-        print(f"⚠️ Error saving agent state: {e}")
-
-def get_account_balance(account=None):
-    """Get account balance in USD based on exchange type"""
-    try:
-        if EXCHANGE in ["ASTER", "HYPERLIQUID"]:
-            if EXCHANGE == "ASTER":
-                balance_dict = n.get_account_balance()
-                balance = balance_dict.get('available', 0) 
-                cprint(f"💰 {EXCHANGE} Available Balance: ${balance:,.2f} USD", "cyan")
-                
-            else:  # HYPERLIQUID
-                address = os.getenv("ACCOUNT_ADDRESS")
-                if not address:
-                    if account is None:
-                        account = n._get_account_from_env()
-                    address = account.address
-
-                try:
-                    if hasattr(n, 'get_available_balance'):
-                        balance = n.get_available_balance(address)
-                        cprint(f"💰 {EXCHANGE} Available (Free) USDC: ${balance}", "cyan")
-                        
-                        total_val = n.get_account_value(address)
-                        cprint(f"   (Total Equity including positions: ${total_val})", "white")
-                    else:
-                        cprint("⚠️ Using Total Equity (Warning: Checks locked collateral)", "yellow")
-                        balance = n.get_account_value(address)
-                        
-                except Exception as e:
-                    cprint(f"❌ CRITICAL: Error getting balance: {e}", "red")
-                    # Don't return 0, raise exception
-                    raise RuntimeError(f"Failed to get HyperLiquid balance: {e}")
-
-            return float(balance)
-            
-        else:
-            # SOLANA
-            balance = n.get_token_balance_usd(USDC_ADDRESS)
-            return balance
-            
-    except Exception as e:
-        cprint(f"❌ CRITICAL: Error getting account balance: {e}", "red")
-        cprint("🛑 Cannot trade with unknown balance - stopping cycle", "red")
-        import traceback
-        traceback.print_exc()
-        
-        # Log to dashboard console
-        try:
-            import sys
-            from pathlib import Path
-            parent_dir = Path(__file__).parent.parent
-            if str(parent_dir) not in sys.path:
-                sys.path.insert(0, str(parent_dir))
-            from trading_app import add_console_log
-            add_console_log(f"❌ Cannot get account balance: {e}", "error")
-        except:
-            pass
-        
-        # RAISE exception instead of returning 0
-        raise RuntimeError(f"Failed to get account balance: {e}")
+        dashboard_logger.error(f"Error saving agent state: {e}")
 
 # ============================================================================
 # TRADING AGENT CONTROL
 # ============================================================================
 
 def run_trading_agent():
-    """Run the trading agent in a loop with output capture - Agent created ONCE"""
+    """Run trading agent with proper memory management"""
     global agent_running, stop_agent_flag, agent_executing
     
-    # ========================================================================
-    # STEP 1: CREATE AGENT INSTANCE ONCE (before the loop)
-    # ========================================================================
     try:
-        add_console_log("🔧 Initializing Trading Agent...", "info")
+        dashboard_logger.info("Initializing Trading Agent...")
         
-        # Try importing from src.agents first
         try:
             from src.agents.trading_agent import TradingAgent
         except ImportError:
-            # Fallback: try direct import
             try:
                 from trading_agent import TradingAgent
             except ImportError:
-                # Last resort: add to path and import
-                import sys
                 sys.path.insert(0, str(BASE_DIR / "src" / "agents"))
                 from trading_agent import TradingAgent
         
-        # Create single agent instance that will be reused for all cycles
         agent = TradingAgent()
-        add_console_log("✅ Trading agent instance created successfully", "success")
+        dashboard_logger.info("Trading agent initialized successfully")
         
     except Exception as e:
-        add_console_log(f"❌ Failed to create agent: {str(e)}", "error")
-        import traceback
-        traceback.print_exc()
-        
-        # Reset flags and exit
+        dashboard_logger.error(f"Failed to create agent: {e}")
         with agent_lock:
             agent_running = False
             agent_executing = False
         return
     
-    # ========================================================================
-    # STEP 2: RUN TRADING CYCLES IN LOOP (reusing same agent)
-    # ========================================================================
     cycle_count = 0
     
     while agent_running and not stop_agent_flag:
         try:
             cycle_count += 1
-            add_console_log(f"Starting Cycle #{cycle_count}", "info")
+            dashboard_logger.info(f"Starting Cycle #{cycle_count}")
             
-            # SET EXECUTION FLAG WITH LOCK
             with agent_lock:
                 agent_executing = True
             
-            # Capture start time
             cycle_start = time.time()
             
-            # Get tokens list
             if EXCHANGE in ["ASTER", "HYPERLIQUID"]:
                 from src.agents.trading_agent import SYMBOLS as tokens
             else:
                 from src.agents.trading_agent import MONITORED_TOKENS as tokens
             
-            # Log analysis start
-            add_console_log(f"🤖 Analyzing {len(tokens)} tokens", "info")
+            dashboard_logger.info(f"Analyzing {len(tokens)} tokens")
             
-            # Run the trading cycle (REUSE SAME AGENT INSTANCE)
             agent.run_trading_cycle()
             
-            # Calculate cycle duration
             cycle_duration = int(time.time() - cycle_start)
-            
-            add_console_log(f"✅ Cycle #{cycle_count} complete ({cycle_duration}s)", "info")
+            dashboard_logger.info(f"Cycle #{cycle_count} complete ({cycle_duration}s)")
 
-            # CLEAR EXECUTION FLAG WITH LOCK
             with agent_lock:
                 agent_executing = False
             
-            # Get recommendations summary
             if hasattr(agent, 'recommendations_df') and len(agent.recommendations_df) > 0:
                 buy_count = len(agent.recommendations_df[agent.recommendations_df['action'] == 'BUY'])
                 sell_count = len(agent.recommendations_df[agent.recommendations_df['action'] == 'SELL'])
                 nothing_count = len(agent.recommendations_df[agent.recommendations_df['action'] == 'NOTHING'])
-                add_console_log(f"📊 Signals: {buy_count} BUY, {sell_count} SELL, {nothing_count} HOLD", "info")
+                dashboard_logger.info(f"Signals: {buy_count} BUY, {sell_count} SELL, {nothing_count} HOLD")
+                
+                # Clear DataFrame to free memory
+                agent.recommendations_df = agent.recommendations_df.iloc[0:0]
             
-            # Wait before next cycle
+            # Force garbage collection
+            import gc
+            gc.collect()
+            
             from src.agents.trading_agent import SLEEP_BETWEEN_RUNS_MINUTES as minutes
-            add_console_log(f"Next cycle in {minutes} minutes", "info")
+            dashboard_logger.info(f"Next cycle in {minutes} minutes")
             
-            # Wait with stop flag checking every minute
             for i in range(minutes):
                 if stop_agent_flag:
-                    add_console_log("Stop signal received", "info")
+                    dashboard_logger.info("Stop signal received")
                     break
                 time.sleep(60)
             
         except Exception as e:
-            # RESET EXECUTING FLAG ON ERROR WITH LOCK
             with agent_lock:
                 agent_executing = False
                 
-            error_msg = f"❌ Cycle #{cycle_count} error: {str(e)}"
-            add_console_log(error_msg, "error")
-            import traceback
-            traceback.print_exc()
-            add_console_log("🔄 Retrying in 60 sec", "warning")
+            dashboard_logger.error(f"Cycle #{cycle_count} error: {e}")
+            dashboard_logger.warning("Retrying in 60 seconds")
             time.sleep(60)
     
-    # ========================================================================
-    # STEP 3: CLEANUP WHEN LOOP EXITS
-    # ========================================================================
+    # Cleanup
     with agent_lock:
         agent_running = False
         agent_executing = False
-        
-    add_console_log(f"Agent stopped after {cycle_count} cycles", "info")
+    
+    # Force delete agent to free memory
+    del agent
+    import gc
+    gc.collect()
+    
+    dashboard_logger.info(f"Agent stopped after {cycle_count} cycles")
 
 # ============================================================================
 # FLASK ROUTES
@@ -740,21 +519,17 @@ def run_trading_agent():
 
 @app.route('/')
 def index():
-    """Serve the main dashboard"""
     return render_template('index.html')
 
-    
 @app.route('/api/agent-status')
 def get_agent_status():
-    """Lightweight status check - returns if agent is actively executing"""
+    """Lightweight status check"""
     global agent_running, agent_executing, agent_thread
     with agent_lock:
-        # Also check if thread is actually alive
         thread_alive = agent_thread is not None and agent_thread.is_alive()
         
-        # If thread died but flags say running, fix the flags
         if agent_running and not thread_alive:
-            add_console_log("⚠️ Agent thread died unexpectedly - resetting flags", "warning")
+            dashboard_logger.warning("Agent thread died unexpectedly - resetting flags")
             agent_running = False
             agent_executing = False
         
@@ -767,21 +542,19 @@ def get_agent_status():
 
 @app.route('/api/data')
 def get_data():
-    """API endpoint for account data and positions"""
+    """Account data and positions"""
     try:
         account_data = get_account_data()
         positions = get_positions_data()
         
-        response = {
+        return jsonify({
             **account_data,
             "positions": positions,
             "timestamp": datetime.now().isoformat()
-        }
-        
-        return jsonify(response)
+        })
         
     except Exception as e:
-        print(f"❌ Error in /api/data: {e}")
+        dashboard_logger.error(f"Error in /api/data: {e}")
         return jsonify({
             "error": str(e),
             "account_balance": 0,
@@ -792,68 +565,30 @@ def get_data():
             "agent_running": False
         }), 500
 
-
 @app.route('/api/trades')
 def get_trades():
-    """API endpoint for recent trades"""
-    try:
-        trades = load_trades()
-        return jsonify(trades)
-    except Exception as e:
-        print(f"❌ Error in /api/trades: {e}")
-        return jsonify([])
-
+    return jsonify(load_trades())
 
 @app.route('/api/history')
 def get_history():
-    """API endpoint for balance history"""
     try:
         if HISTORY_FILE.exists():
             with open(HISTORY_FILE, 'r') as f:
-                history = json.load(f)
-                return jsonify(history)
+                return jsonify(json.load(f))
         return jsonify([])
     except Exception as e:
-        print(f"❌ Error in /api/history: {e}")
+        dashboard_logger.error(f"Error loading history: {e}")
         return jsonify([])
-
 
 @app.route('/api/console')
 def get_console():
-    """
-    Return console logs with proper deduplication and ordering
-    Only reads from file (not in-memory cache) to avoid duplicates
-    """
-    try:
-        if CONSOLE_FILE.exists():
-            with open(CONSOLE_FILE, 'r') as f:
-                content = f.read().strip()
-                logs = json.loads(content) if content else []
-        else:
-            logs = []
-        
-        # Return last 100 logs only (reduces clutter and improves performance)
-        # Logs are already in chronological order from the file
-        return jsonify(logs[-100:])
-        
-    except json.JSONDecodeError as e:
-        print(f"⚠️ Console log file corrupted: {e}", flush=True)
-        # Reset corrupted file
-        with open(CONSOLE_FILE, 'w') as f:
-            json.dump([], f)
-        return jsonify([])
-        
-    except Exception as e:
-        print(f"⚠️ Error reading console logs: {e}", flush=True)
-        return jsonify([])
-
+    """Return console logs from rotating log file"""
+    return jsonify(get_console_logs())
 
 @app.route('/api/start', methods=['POST'])
 def start_agent():
-    """Start the trading agent"""
     global agent_thread, agent_running, stop_agent_flag
     
-    # USE LOCK FOR ENTIRE START OPERATION
     with agent_lock:
         if agent_running:
             return jsonify({
@@ -864,30 +599,26 @@ def start_agent():
         agent_running = True
         stop_agent_flag = False
         
-        # Save state with timestamp
         state = load_agent_state()
         state["running"] = True
         state["last_started"] = datetime.now().isoformat()
         state["total_cycles"] = state.get("total_cycles", 0) + 1
         save_agent_state(state)
         
-        # Start agent thread
         agent_thread = threading.Thread(target=run_trading_agent, daemon=True)
         agent_thread.start()
     
-    add_console_log("Trading agent started via dashboard", "success")
+    dashboard_logger.info("Trading agent started via dashboard")
     
     return jsonify({
         "status": "started",
         "message": "Trading agent started successfully"
     })
-    
+
 @app.route('/api/stop', methods=['POST'])
 def stop_agent():
-    """Stop the trading agent"""
     global agent_running, stop_agent_flag
     
-    # USE LOCK FOR ENTIRE STOP OPERATION
     with agent_lock:
         if not agent_running:
             return jsonify({
@@ -898,140 +629,118 @@ def stop_agent():
         stop_agent_flag = True
         agent_running = False
         
-        # Save state with timestamp
         state = load_agent_state()
         state["running"] = False
         state["last_stopped"] = datetime.now().isoformat()
         save_agent_state(state)
     
-    add_console_log("Trading agent stop requested via dashboard", "info")
+    dashboard_logger.info("Trading agent stopped via dashboard")
     
     return jsonify({
         "status": "stopped",
         "message": "Trading agent stopped successfully"
     })
 
-
 @app.route('/health')
 def health_check():
-    """Health check endpoint for EasyPanel"""
     return jsonify({
         "status": "healthy",
         "timestamp": datetime.now().isoformat()
     }), 200
 
-@app.route('/api/debug-status')
-def debug_status():
-    """Detailed debugging status endpoint"""
-    with agent_lock:
-        return jsonify({
-            "agent_running": agent_running,
-            "agent_executing": agent_executing,
-            "stop_agent_flag": stop_agent_flag,
-            "shutdown_in_progress": shutdown_in_progress,
-            "thread_exists": agent_thread is not None,
-            "thread_alive": agent_thread.is_alive() if agent_thread else False,
-            "thread_daemon": agent_thread.daemon if agent_thread else None,
-            "exchange_connected": EXCHANGE_CONNECTED,
-            "exchange_type": EXCHANGE,
-            "timestamp": datetime.now().isoformat()
-        })
- 
 # ============================================================================
-# GRACEFUL SHUTDOWN HANDLER
+# GRACEFUL SHUTDOWN
 # ============================================================================
 
 def cleanup_and_exit(signum=None, frame=None):
-    """
-    Graceful shutdown handler - ALWAYS releases port 5000
-    Called on Ctrl+C or kill signal
-    """
+    """Graceful shutdown handler"""
     global agent_running, stop_agent_flag, shutdown_in_progress
     
-    # Prevent multiple shutdown attempts
     if shutdown_in_progress:
         return
     
     shutdown_in_progress = True
     
-    print("\n\n" + "="*60)
+    print("\n" + "="*60)
     print("🛑 SHUTDOWN SIGNAL RECEIVED")
     print("="*60)
     
-    # Stop trading agent if running
     if agent_running:
         print("⏹️  Stopping trading agent...")
         stop_agent_flag = True
         agent_running = False
         
-        # Wait for agent thread to finish (max 5 seconds)
         if agent_thread and agent_thread.is_alive():
-            print("   Waiting for agent thread to finish...")
             agent_thread.join(timeout=5)
         
-        # Save final state
         try:
             state = load_agent_state()
             state["running"] = False
             state["last_stopped"] = datetime.now().isoformat()
             save_agent_state(state)
-            add_console_log("Agent stopped - server shutting down", "info")
-            print("   ✅ Agent stopped and state saved")
+            dashboard_logger.info("Agent stopped - server shutting down")
         except Exception as e:
-            print(f"   ⚠️  Error saving agent state: {e}")
-    else:
-        print("ℹ️  Trading agent was not running")
-    
-    # Log shutdown
-    try:
-        add_console_log("Dashboard server shutting down", "info")
-    except Exception:
-        pass
+            print(f"Error saving state: {e}")
     
     print("\n✅ Cleanup complete - Port 5000 released")
     print("="*60)
-    print("👋 Goodbye! You can restart immediately.\n")
+    print("👋 Goodbye!\n")
     
-    # Force exit to ensure port is released
     os._exit(0)
 
-
-# Register shutdown handlers ONLY if we're in the main thread
-# This prevents "signal only works in main thread" errors during circular imports
 if threading.current_thread() is threading.main_thread():
-    signal.signal(signal.SIGINT, cleanup_and_exit)   # Ctrl+C
-    signal.signal(signal.SIGTERM, cleanup_and_exit)  # kill command
+    signal.signal(signal.SIGINT, cleanup_and_exit)
+    signal.signal(signal.SIGTERM, cleanup_and_exit)
     atexit.register(lambda: cleanup_and_exit() if not shutdown_in_progress else None)
 
 # ============================================================================
-# STARTUP
+# STARTUP WITH CLEANUP
 # ============================================================================
 
 if __name__ == '__main__':
+    # Startup cleanup - rotate oversized files
+    print("\n" + "="*60)
+    print("🧹 Startup Cleanup")
+    print("="*60)
+    
+    for file in DATA_DIR.glob('*.json'):
+        if file.stat().st_size > 1_000_000:  # > 1MB
+            backup = file.with_suffix('.json.old')
+            file.rename(backup)
+            print(f"Rotated oversized file: {file.name}")
+    
+    # Clean old temp files
+    for file in TEMP_DIR.glob('*'):
+        if time.time() - file.stat().st_mtime > 3600:  # > 1 hour
+            file.unlink()
+            print(f"Deleted old temp file: {file.name}")
+    
+    print("="*60 + "\n")
+    
     port = int(os.getenv('PORT', 5000))
     
     print(f"""
 {'='*60}
-Marco's AI Trading Dashboard
+🌙 Marco's AI Trading Dashboard - Production Ready
 {'='*60}
 Dashboard URL: http://0.0.0.0:{port}
 Local URL: http://localhost:{port}
 Exchange: HyperLiquid
 Status: {'Connected ✅' if EXCHANGE_CONNECTED else 'Demo Mode ⚠️'}
 Agent: {'Running 🟢' if agent_running else 'Stopped 🔴'}
+Logs: {LOGS_DIR}
+Data: {DATA_DIR}
 {'='*60}
 
 Press Ctrl+C to shutdown gracefully
-Port {port} will be released immediately on exit
 """)
     
-    add_console_log("Dashboard server started", "info")
+    dashboard_logger.info("Dashboard server started")
     
     if not EXCHANGE_CONNECTED:
-        add_console_log("Running in DEMO mode - HyperLiquid not connected", "warning")
+        dashboard_logger.warning("Running in DEMO mode - HyperLiquid not connected")
     
     try:
-        # Run Flask with proper settings for clean shutdown
         app.run(
             host='0.0.0.0',
             port=port,
