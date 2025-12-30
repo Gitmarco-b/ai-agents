@@ -7,13 +7,6 @@ let portfolioChart = null;
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Dashboard initializing...');
 
-    // Load saved theme
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    if (savedTheme === 'light') {
-        document.body.classList.add('light-mode');
-        document.getElementById('theme-icon').textContent = '🌙';
-    }
-
     // Load saved timezone preference
     const savedTimezone = localStorage.getItem('preferred_timezone') || 'local';
     const timezoneSelect = document.getElementById('timezone-select');
@@ -172,23 +165,23 @@ function updateTimestamp() {
 function updateAgentBadge(isRunning, isExecuting = false) {
     const badge = document.getElementById('agent-badge');
     const runBtn = document.getElementById('run-btn');
-    const stopBtn = document.getElementById('stop-btn');
-    
+    const runningIndicator = document.getElementById('running-indicator');
+
     if (isExecuting) {
         badge.textContent = 'Analyzing';
         badge.className = 'agent-badge running';
         runBtn.style.display = 'none';
-        stopBtn.style.display = 'inline-block';
+        runningIndicator.style.display = 'flex';
     } else if (isRunning) {
         badge.textContent = 'Waiting';
         badge.className = 'agent-badge running';
         runBtn.style.display = 'none';
-        stopBtn.style.display = 'inline-block';
+        runningIndicator.style.display = 'flex';
     } else {
         badge.textContent = 'Ready';
         badge.className = 'agent-badge ready';
         runBtn.style.display = 'inline-block';
-        stopBtn.style.display = 'none';
+        runningIndicator.style.display = 'none';
     }
 }
 
@@ -482,25 +475,8 @@ window.addEventListener('beforeunload', () => {
 });
 
 // ============================================================================
-// THEME TOGGLE
+// THEME TOGGLE - REMOVED (Dark mode only)
 // ============================================================================
-
-function toggleTheme() {
-    const body = document.body;
-    const themeIcon = document.getElementById('theme-icon');
-
-    if (body.classList.contains('light-mode')) {
-        // Switch to dark mode
-        body.classList.remove('light-mode');
-        themeIcon.textContent = '☀️';
-        localStorage.setItem('theme', 'dark');
-    } else {
-        // Switch to light mode
-        body.classList.add('light-mode');
-        themeIcon.textContent = '🌙';
-        localStorage.setItem('theme', 'light');
-    }
-}
 
 // ============================================================================
 // SETTINGS MODAL
