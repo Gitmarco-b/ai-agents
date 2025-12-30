@@ -218,9 +218,428 @@ except ImportError:
 # DATA COLLECTION FUNCTIONS
 # ============================================================================
 
-# (keeping your existing functions as-is: get_account_data, get_positions_data,
-# save_balance_history, load_trades, save_trade, add_console_log, etc.)
-# ...
+def get_account_data():
+    """Fetch live account data from HyperLiquid"""
+    if not EXCHANGE_CONNECTED or n is None:
+        # Demo mode data
+        return {
+            "account_balance": 10.0,
+            "total_equity": 10.0,
+            "pnl": 0.0,
+            "status": "Demo Mode",
+            "exchange": "HyperLiquid (Disconnected)",
+            "agent_running": agent_running
+        }
+    
+    try:
+        account = _get_account()
+        address = os.getenv("ACCOUNT_ADDRESS", account.address)
+        
+        # Get live data using the correct function names
+        if hasattr(n, 'get_available_balance'):
+            available_balance = float(n.get_available_balance(address))
+        else:
+            available_balance = 10.0
+        
+        if hasattr(n, 'get_account_value'):
+            total_equity = float(n.get_account_value(address))
+        else:
+            total_equity = 10.0
+        
+        # Calculate PnL (starting balance from config or default $10)
+        starting_balance = 10.0
+        pnl = total_equity - starting_balance
+        
+        # Save to history
+        save_balance_history(total_equity)
+        
+        return {
+            "account_balance": round(available_balance, 2),
+            "total_equity": round(total_equity, 2),
+            "pnl": round(pnl, 2),
+            "status": "Running" if agent_running else "Connected",
+            "exchange": "HyperLiquid",
+            "agent_running": agent_running
+        }
+        
+    except Exception as e:
+        error_msg = f"Error fetching account data: {str(e)}"
+        print(f"❌ {error_msg}")
+        add_console_log(f"❌ {error_msg}")
+        
+        return {
+            "account_balance": 0.0,
+            "total_equity": 0.0,
+            "pnl": 0.0,
+            "status": "Error",
+            "exchange": "HyperLiquid",
+            "agent_running": agent_running
+        }
+
+
+def get_positions_data():
+    """Fetch ALL live open positions from HyperLiquid"""
+    if not EXCHANGE_CONNECTED or n is None:
+        print("⚠️ Exchange not connected or nice_funcs not loaded")
+        return []
+
+    try:
+        # Get account
+        account = _get_account()
+        address = os.getenv("ACCOUNT_ADDRESS", account.address)
+        
+        print(f"\n{'='*60}")
+        print(f"🔍 Fetching positions for address: {address}")
+        print(f"{'='*60}")
+        
+        # Import HyperLiquid SDK
+        from hyperliquid.info import Info
+        from hyperliquid.utils import constants
+        
+        # Connect to HyperLiquid Info API
+        info = Info(constants.MAINNET_API_URL, skip_ws=True)
+        user_state = info.user_state(address)
+        
+        positions = []
+        
+        # Check if assetPositions exists
+        if "assetPositions" not in user_state:
+            print("❌ No 'assetPositions' field in user_state")
+            print(f"Available fields: {list(user_state.keys())}")
+            return []
+        
+        asset_positions = user_state["assetPositions"]
+        print(f"📊 Found {len(asset_positions)} asset position entries")
+        
+        # Loop through ALL asset positions
+        for idx, position in enumerate(asset_positions):
+            try:
+                raw_pos = position.get("position", {})
+                symbol = raw_pos.get("coin", "Unknown")
+                pos_size = float(raw_pos.get("szi", 0))
+                
+                print(f"\n   Position {idx + 1}: {symbol} | Size: {pos_size}")
+                
+                # Only include non-zero positions
+                if pos_size == 0:
+                    print(f"   ⏭️  Skipping {symbol} (size = 0)")
+                    continue
+                
+                # Get position details
+                entry_px = float(raw_pos.get("entryPx", 0))
+                pnl_perc = float(raw_pos.get("returnOnEquity", 0)) * 100
+                is_long = pos_size > 0
+                side = "LONG" if is_long else "SHORT"
+                
+                print(f"   📍 {symbol} {side} position detected!")
+                print(f"      Entry: ${entry_px:.2f} | PnL: {pnl_perc:.2f}%")
+                
+                # Fetch current mark price
+                try:
+                    ask, bid, _ = n.ask_bid(symbol)
+                    mark_price = (ask + bid) / 2
+                    print(f"      Mark price: ${mark_price:.2f}")
+                except Exception as price_err:
+                    print(f"      ⚠️ Could not fetch mark price: {price_err}")
+                    mark_price = entry_px
+                    print(f"      Using entry price as fallback: ${mark_price:.2f}")
+                
+                # Calculate position value in USD
+                position_value = abs(pos_size) * mark_price
+                
+                print(f"      Position value: ${position_value:.2f}")
+                
+                # Add to positions array
+                position_obj = {
+                    "symbol": symbol,
+                    "size": float(pos_size),
+                    "entry_price": float(entry_px),
+                    "mark_price": float(mark_price),
+                    "position_value": float(position_value),
+                    "pnl_percent": float(pnl_perc),
+                    "side": side
+                }
+                
+                positions.append(position_obj)
+                
+                print(f"   ✅ Added to positions array: {symbol} {side}")
+                
+            except Exception as pos_err:
+                print(f"   ❌ Error processing position {idx + 1}: {pos_err}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        print(f"\n{'='*60}")
+        print(f"✅ Total positions to return: {len(positions)}")
+        print(f"{'='*60}\n")
+        
+        # Log positions for debugging
+        if positions:
+            for pos in positions:
+                print(f"   • {pos['symbol']} {pos['side']}: ${pos['position_value']:.2f}")
+        else:
+            print("   (No open positions)")
+        
+        return positions
+
+    except Exception as e:
+        print(f"\n{'='*60}")
+        print(f"❌ CRITICAL ERROR in get_positions_data()")
+        print(f"{'='*60}")
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+        print(f"{'='*60}\n")
+        return []
+
+
+def save_balance_history(balance):
+    """Save balance to history (max 100 entries)"""
+    try:
+        if HISTORY_FILE.exists():
+            with open(HISTORY_FILE, 'r') as f:
+                history = json.load(f)
+        else:
+            history = []
+        
+        # Add new entry
+        history.append({
+            "timestamp": datetime.now().isoformat(),
+            "balance": float(balance)
+        })
+        
+        # Keep only last 100
+        history = history[-100:]
+        
+        with open(HISTORY_FILE, 'w') as f:
+            json.dump(history, f, indent=2)
+            
+    except Exception as e:
+        print(f"⚠️ Error saving balance history: {e}")
+
+
+def load_trades():
+    """Load recent trades from file"""
+    try:
+        if TRADES_FILE.exists():
+            with open(TRADES_FILE, 'r') as f:
+                trades = json.load(f)
+                return trades[-20:]  # Last 20 trades
+        return []
+    except Exception as e:
+        print(f"⚠️ Error loading trades: {e}")
+        return []
+
+
+def save_trade(trade_data):
+    """Save a completed trade"""
+    try:
+        if TRADES_FILE.exists():
+            with open(TRADES_FILE, 'r') as f:
+                trades = json.load(f)
+        else:
+            trades = []
+        
+        trades.append(trade_data)
+        trades = trades[-100:]  # Keep last 100
+        
+        with open(TRADES_FILE, 'w') as f:
+            json.dump(trades, f, indent=2)
+        
+        # Log trade to console
+        symbol = trade_data.get('symbol', 'Unknown')
+        side = trade_data.get('side', 'LONG')
+        pnl = trade_data.get('pnl', 0)
+        
+        # Format log message
+        side_emoji = "📈" if side == "LONG" else "📉"
+        log_message = f"{side_emoji} Closed {side} {symbol} ${pnl:+.2f}"
+        
+        add_console_log(log_message, "trade")
+            
+    except Exception as e:
+        print(f"⚠️ Error saving trade: {e}")
+
+def log_position_open(symbol, side, size_usd):
+    """Log when a position is opened"""
+    try:
+        emoji = "📈" if side == "LONG" else "📉"
+        message = f"{emoji} Opened {side} {symbol} ${size_usd:.2f}"
+        add_console_log(message, "trade")
+    except Exception as e:
+        print(f"⚠️ Error logging position open: {e}")
+
+
+def add_console_log(message, level="info"):
+    """
+    Add a log message to console with level support
+    Args:
+        message (str): Log message text
+        level (str): Log level - "info", "success", "error", "warning", "trade"
+    """
+    try:
+        if CONSOLE_FILE.exists():
+            with open(CONSOLE_FILE, 'r') as f:
+                logs = json.load(f)
+        else:
+            logs = []
+        
+        logs.append({
+            "timestamp": datetime.now().strftime("%H:%M:%S"),
+            "message": str(message),
+            "level": level
+        })
+        
+        logs = logs[-50:]  # Keep last 50 logs
+        
+        with open(CONSOLE_FILE, 'w') as f:
+            json.dump(logs, f, indent=2)
+            
+        # Also print to console
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+        
+    except Exception as e:
+        print(f"⚠️ Error saving console log: {e}")
+
+
+def get_console_logs():
+    """Get console logs"""
+    try:
+        if CONSOLE_FILE.exists():
+            with open(CONSOLE_FILE, 'r') as f:
+                content = f.read()
+                if not content.strip():
+                    return []
+                return json.loads(content)
+        return []
+    except json.JSONDecodeError as e:
+        print(f"⚠️ Console log file corrupted, resetting: {e}")
+        # Reset corrupted file
+        with open(CONSOLE_FILE, 'w') as f:
+            json.dump([], f)
+        return []
+    except Exception as e:
+        print(f"⚠️ Error loading console logs: {e}")
+        return []
+
+def load_agent_state():
+    """Load agent state from persistent storage"""
+    try:
+        if AGENT_STATE_FILE.exists():
+            with open(AGENT_STATE_FILE, 'r') as f:
+                return json.load(f)
+        
+        # Return default state if file doesn't exist
+        return {
+            "running": False,
+            "last_started": None,
+            "last_stopped": None,
+            "total_cycles": 0
+        }
+    except Exception as e:
+        print(f"⚠️ Error loading agent state: {e}")
+        return {
+            "running": False,
+            "last_started": None,
+            "last_stopped": None,
+            "total_cycles": 0
+        }
+
+
+def save_agent_state(state):
+    """Save agent state to persistent storage"""
+    try:
+        with open(AGENT_STATE_FILE, 'w') as f:
+            json.dump(state, f, indent=2)
+    except Exception as e:
+        print(f"⚠️ Error saving agent state: {e}")
+
+# ============================================================================
+# TRADING AGENT CONTROL
+# ============================================================================
+
+def run_trading_agent():
+    """Run the trading agent in a loop with output capture"""
+    global agent_running, stop_agent_flag
+    
+    add_console_log("Trading agent started", "success")
+    
+    while agent_running and not stop_agent_flag:
+        try:
+            add_console_log(f"Running analysis cycle", "info")
+            
+            # ADD THIS - Set execution flag
+            global agent_executing
+            agent_executing = True
+            
+            # Capture start time
+            cycle_start = time.time()
+            
+            # Import trading agent
+            try:
+                from src.agents.trading_agent import TradingAgent
+            except ImportError:
+                try:
+                    from trading_agent import TradingAgent
+                except ImportError:
+                    import sys
+                    sys.path.insert(0, str(BASE_DIR / "src" / "agents"))
+                    from trading_agent import TradingAgent
+            
+            # Create agent instance
+            agent = TradingAgent()
+            
+            # Get tokens list
+            if EXCHANGE in ["ASTER", "HYPERLIQUID"]:
+                from trading_agent import SYMBOLS as tokens
+            else:
+                from trading_agent import MONITORED_TOKENS as tokens
+            
+            # Log analysis start
+            add_console_log(f"\n🤖 Analyzing {len(tokens)} tokens", "info")
+            
+            # Run the trading cycle
+            agent.run_trading_cycle()
+            
+            # Calculate cycle duration
+            cycle_duration = int(time.time() - cycle_start)
+            
+            add_console_log(f"Cycle complete ({cycle_duration}s)", "success")
+
+            # Clear execution flag
+            agent_executing = False
+            
+            # Get recommendations summary
+            if hasattr(agent, 'recommendations_df') and len(agent.recommendations_df) > 0:
+                buy_count = len(agent.recommendations_df[agent.recommendations_df['action'] == 'BUY'])
+                sell_count = len(agent.recommendations_df[agent.recommendations_df['action'] == 'SELL'])
+                nothing_count = len(agent.recommendations_df[agent.recommendations_df['action'] == 'NOTHING'])
+                
+                add_console_log(f"Signals: {buy_count} BUY, {sell_count} SELL, {nothing_count} HOLD", "trade")
+
+            from trading_agent import SLEEP_BETWEEN_RUNS_MINUTES as minutes
+            # Wait 60 minutes before next cycle
+            add_console_log("✅ Finished Trading cycle...", "info")
+            add_console_log("Next cycle starts in minutes", "info")
+            
+            # Wait with stop flag checking every minute
+            for i in range(60):
+                if stop_agent_flag:
+                    add_console_log("Stop signal received", "info")
+                    break
+                time.sleep(60)
+            
+        except Exception as e:
+            error_msg = f"Cycle error: {str(e)}"
+            add_console_log(error_msg, "error")
+            import traceback
+            traceback.print_exc()
+            add_console_log("Retrying in 60 sec", "warning")
+            time.sleep(60)
+    
+    agent_running = False
+    add_console_log("Agent stopped", "info")
 
 # ============================================================================
 # FLASK ROUTES
