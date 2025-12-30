@@ -1259,6 +1259,47 @@ Trading Recommendations (BUY signals only):
                             log_position_open(token, "LONG", notional_value)
                         except Exception:
                             pass
+                    elif current_position > target_allocation:
+                        # Need to REDUCE position
+                        reduction_amount = current_position - target_allocation
+
+                        if target_allocation == 0:
+                            # Full close
+                            print(f"📉 Closing complete position for {token}")
+                            add_console_log(f"📉 Closing complete {token} position", "info")
+
+                            if EXCHANGE == "HYPERLIQUID":
+                                n.close_complete_position(token, self.account)
+                            else:
+                                n.chunk_kill(token, max_usd_order_size, slippage)
+
+                            print(f"✅ Position closed for {token}")
+                        else:
+                            # Partial reduction
+                            reduction_pct = (reduction_amount / current_position) * 100
+                            print(f"📉 Reducing {token} position by ${reduction_amount:.2f} ({reduction_pct:.0f}%)")
+                            add_console_log(f"📉 Reducing {token} by {reduction_pct:.0f}% (${reduction_amount:.2f})", "info")
+
+                            # Get current position details to determine side
+                            if EXCHANGE == "HYPERLIQUID":
+                                pos_data = n.get_position(token, self.account)
+                                _, im_in_pos, pos_size, _, _, _, is_long = pos_data
+
+                                if im_in_pos:
+                                    if is_long:
+                                        # Reduce LONG by selling
+                                        cprint(f"🔵 Selling ${reduction_amount:.2f} to reduce LONG", "yellow")
+                                        n.market_sell(token, reduction_amount, self.account)
+                                    else:
+                                        # Reduce SHORT by buying
+                                        cprint(f"🔵 Buying ${reduction_amount:.2f} to reduce SHORT", "yellow")
+                                        n.market_buy(token, reduction_amount, self.account)
+                            else:
+                                # For Solana/other exchanges
+                                n.chunk_kill(token, reduction_amount, slippage)
+
+                            print(f"✅ Position reduced for {token}")
+                            add_console_log(f"✅ {token} position reduced by {reduction_pct:.0f}%", "success")
                     else:
                         print(f"⏸️ Position already at target size for {token}")
                         add_console_log(f"⏸️ {token} already at target - no action", "info")
