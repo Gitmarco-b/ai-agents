@@ -451,31 +451,36 @@ signal.signal(signal.SIGTERM, cleanup_and_exit)
 atexit.register(lambda: cleanup_and_exit() if not shutdown_in_progress else None)
 
 # ============================================================================
-# STARTUP
+# STARTUP SECTION
 # ============================================================================
 
 if __name__ == '__main__':
+    # Get port from environment or default to 5000
     port = int(os.getenv('PORT', 5000))
+
+    # Startup Banner for Terminal
     print(f"""
 {'=' * 60}
-Started: Your AI Trading Dashboard
+AI Trading Dashboard
 {'=' * 60}
 Dashboard URL: http://0.0.0.0:{port}
-Local URL: http://localhost:{port}
-Exchange: HyperLiquid
-Status: {'Connected ✅' if EXCHANGE_CONNECTED else 'Demo Mode ⚠️'}
-Agent: {'Running 🟢' if agent_running else 'Stopped 🔴'}
+Local URL:     http://localhost:{port}
+Exchange:      HyperLiquid
+Status:        {'Connected ✅' if EXCHANGE_CONNECTED else 'Demo Mode ⚠️'}
+Agent Status:  {'Running 🟢' if agent_running else 'Stopped 🔴'}
 {'=' * 60}
 Press Ctrl+C to shutdown gracefully
-Port {port} will be released immediately on exit
 """)
 
-def add_console_log("Dashboard server started", "info")
+    # Corrected: Call the function without 'def'
+    add_console_log("Dashboard server started", "info")
 
+    # Log a warning if the exchange functions failed to load
     if not EXCHANGE_CONNECTED:
         add_console_log("Running in DEMO mode - HyperLiquid not connected", "warning")
 
     try:
+        # Run the Flask production server
         app.run(
             host='0.0.0.0',
             port=port,
@@ -484,7 +489,9 @@ def add_console_log("Dashboard server started", "info")
             threaded=True
         )
     except KeyboardInterrupt:
+        # Handle Ctrl+C gracefully using the cleanup function
         cleanup_and_exit()
     except Exception as e:
+        # Log any unexpected server errors
         print(f"\n❌ Server error: {e}")
         cleanup_and_exit()
