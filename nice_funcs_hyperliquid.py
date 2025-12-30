@@ -1187,3 +1187,72 @@ def close_complete_position(symbol, account, slippage=0.01):
     except Exception as e:
         print(f'{colored("❌ Error executing close:", "red")} {e}')
         return False
+
+
+# ============================================================================
+# DATA COLLECTION FOR TRADING AGENT
+# ============================================================================
+
+def collect_all_tokens(tokens, days_back=1, timeframe='5m', exchange='HYPERLIQUID'):
+    """
+    Collect OHLCV data for multiple tokens
+    
+    Args:
+        tokens (list): List of token symbols (e.g., ['BTC', 'ETH', 'SOL'])
+        days_back (int): Number of days of historical data
+        timeframe (str): Candle timeframe (e.g., '5m', '15m', '1h')
+        exchange (str): Exchange name (only 'HYPERLIQUID' supported)
+    
+    Returns:
+        dict: {symbol: DataFrame} mapping for each token
+    """
+    from termcolor import cprint
+    
+    print("\n" + "="*60)
+    cprint(f"Collecting data for {len(tokens)} tokens", "cyan", attrs=["bold"])
+    print("="*60)
+    
+    # Calculate number of bars based on timeframe
+    timeframe_minutes = {
+        '1m': 1, '5m': 5, '15m': 15, '30m': 30,
+        '1h': 60, '4h': 240, '1d': 1440
+    }
+    
+    minutes = timeframe_minutes.get(timeframe, 5)
+    bars_needed = int((days_back * 24 * 60) / minutes)
+    bars_needed = min(bars_needed, 5000)  # HyperLiquid max
+    
+    cprint(f"Timeframe: {timeframe} ({minutes} min candles)", "yellow")
+    cprint(f"Days back: {days_back}", "yellow")
+    cprint(f"Bars to fetch: {bars_needed}", "yellow")
+    
+    market_data = {}
+    
+    for i, symbol in enumerate(tokens, 1):
+        try:
+            cprint(f"\n[{i}/{len(tokens)}] Fetching {symbol}...", "cyan")
+            
+            # Fetch data using existing get_data function
+            df = get_data(
+                symbol=symbol,
+                timeframe=timeframe,
+                bars=bars_needed,
+                add_indicators=True
+            )
+            
+            if not df.empty:
+                market_data[symbol] = df
+                cprint(f"{symbol}: {len(df)} candles", "green")
+            else:
+                cprint(f"{symbol}: No data returned", "yellow")
+                
+        except Exception as e:
+            cprint(f"{symbol}: Error - {str(e)}", "red")
+            traceback.print_exc()
+            continue
+    
+    print("\n" + "="*60)
+    cprint(f"Collected data for {len(market_data)}/{len(tokens)} tokens", "green", attrs=["bold"])
+    print("="*60 + "\n")
+    
+    return market_data
