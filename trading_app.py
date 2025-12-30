@@ -22,6 +22,9 @@ import atexit
 # SETUP & CONFIGURATION
 # ============================================================================
 
+# 🦈 EXCHANGE SELECTION
+EXCHANGE = "HYPERLIQUID"  # Options: "ASTER", "HYPERLIQUID", "SOLANA"
+
 # Add project root to Python path
 BASE_DIR = Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
@@ -85,7 +88,8 @@ try:
         return Account.from_key(clean_key)
 
     EXCHANGE_CONNECTED = True
-    print("✅ HyperLiquid functions loaded from src.nice_funcs_hyperliquid")
+    print("✅ HyperLiquid functions loaded")
+    add_console_log("✅ HyperLiquid functions loaded")
 
 except ImportError:
     try:
