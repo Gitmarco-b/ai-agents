@@ -190,11 +190,13 @@ MONITORED_TOKENS = []
 
 # For ASTER/HYPERLIQUID exchanges
 SYMBOLS = [
+    'ETH',        # Ethereum
+    'BTC',        # Bitcoin
     'SOL',        # Solana
     'AAVE',       # Aave
     'LINK',       # Chainlink
     'LTC',        # Litecoin
-    'HYPE',       # Hyperliquid Token
+    'HYPE',       # Hyperliquid Exchange Token
     'FARTCOIN',   # FartCoin (for the fun)
 ]
 
