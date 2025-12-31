@@ -93,6 +93,30 @@ except ImportError:
     PROFIT_TARGET_THRESHOLD = 0.5
     MIN_CONFIDENCE_TO_CLOSE = 80
 
+# Import unified AI gateway
+try:
+    from src.utils.ai_gateway import (
+        analyze_with_ai, AIResponse, parse_ai_response,
+        format_position_prompt, format_entry_prompt
+    )
+    AI_GATEWAY_AVAILABLE = True
+except ImportError:
+    AI_GATEWAY_AVAILABLE = False
+
+# Import intelligence integrator for strategy and volume signals
+try:
+    from src.utils.intelligence_integrator import (
+        collect_all_intelligence, get_volume_intel_for_token,
+        get_strategy_signals, format_strategy_signals_for_ai,
+        format_volume_intel_for_ai, get_volume_summary
+    )
+    INTELLIGENCE_AVAILABLE = True
+except ImportError:
+    INTELLIGENCE_AVAILABLE = False
+    def collect_all_intelligence(*args, **kwargs): return {"token": "", "combined_context": ""}
+    def get_volume_intel_for_token(*args, **kwargs): return None
+    def get_volume_summary(): return ""
+
 
 # Load Environment Variables
 load_dotenv()
@@ -1753,7 +1777,7 @@ Trading Recommendations (BUY signals only):
         self.run_trading_cycle()
 
     def run_trading_cycle(self, strategy_signals=None):
-        """Enhanced trading cycle with position management"""
+        """Enhanced trading cycle with position management and intelligence integration"""
         try:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             cprint(f"\n{'=' * 80}", "cyan")
@@ -1766,6 +1790,14 @@ Trading Recommendations (BUY signals only):
             if self.should_stop():
                 add_console_log("⏹️ Stop signal received - aborting cycle", "warning")
                 return
+
+            # STEP 0: DISPLAY VOLUME INTELLIGENCE SUMMARY (if available)
+            if INTELLIGENCE_AVAILABLE:
+                volume_summary = get_volume_summary()
+                if volume_summary and "No volume" not in volume_summary:
+                    cprint("\n📊 VOLUME INTELLIGENCE:", "white", "on_blue")
+                    cprint(volume_summary, "cyan")
+                    add_console_log("📊 Volume intelligence loaded", "info")
 
             # STEP 1: FETCH ALL OPEN POSITIONS
             add_console_log("Fetching open positions...", "info")
