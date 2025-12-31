@@ -9,7 +9,8 @@ from termcolor import cprint
 from dotenv import load_dotenv
 import time
 from datetime import datetime, timedelta
-from config import *
+from src import config
+from src.config import *
 
 # Add project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -62,7 +63,9 @@ def run_agents():
                 # Run Strategy Analysis
                 if strategy_agent:
                     cprint("\n📊 Running Strategy Analysis...", "cyan")
-                    for token in MONITORED_TOKENS:
+                    # Use get_active_tokens() to get the appropriate token list based on exchange
+                    active_tokens = get_active_tokens()
+                    for token in active_tokens:
                         if token not in EXCLUDED_TOKENS:  # Skip USDC and other excluded tokens
                             cprint(f"\n🔍 Analyzing {token}...", "cyan")
                             strategy_agent.get_signals(token)

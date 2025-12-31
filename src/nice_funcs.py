@@ -3,6 +3,7 @@
 Built with love by Moon Dev 🚀
 """
 
+from src import config
 from src.config import *
 import requests
 import pandas as pd
