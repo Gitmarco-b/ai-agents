@@ -8,7 +8,7 @@
 }
 
 :root {
-    /* Dark theme (default) */
+    /* Dark theme (matching login page) */
     --bg-primary: #0a0a0a;
     --bg-secondary: #141414;
     --bg-tertiary: #1e1e1e;
@@ -104,10 +104,9 @@ html, body {
 }
 
 .header-right {
-    display: column;
-    align-content: flex-end;
+    display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 12px;
 }
 
 .timestamp {
@@ -596,25 +595,42 @@ html, body {
     background: var(--border-color);
 }
 
-/* Icon Buttons */
+/* Icon Buttons (Glassmorphic Style) */
 .icon-btn {
     width: 36px;
     height: 36px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
+    background: rgba(30, 30, 30, 0.6);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     font-size: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    color: var(--text-secondary);
 }
 
 .icon-btn:hover {
-    background: var(--bg-secondary);
-    border-color: var(--accent-blue);
-    transform: translateY(-2px);
+    background: rgba(30, 30, 30, 0.8);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+}
+
+.icon-btn:active {
+    transform: translateY(0);
+}
+
+.icon-btn-stop:hover {
+    border-color: var(--accent-red);
+    color: var(--accent-red);
+}
+
+.icon-btn svg {
+    display: block;
 }
 
 /* Logout Button */
@@ -697,6 +713,85 @@ html, body {
     margin-bottom: 20px;
 }
 
+.setting-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.setting-group.half {
+    margin-bottom: 0;
+}
+
+/* Account Modal Styles */
+.account-summary-box {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.account-avatar {
+    width: 60px;
+    height: 60px;
+    background: rgba(0, 255, 136, 0.1);
+    border: 2px solid var(--accent-green);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-green);
+    flex-shrink: 0;
+}
+
+.account-info h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.account-email {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.account-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.stat-item {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.stat-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
 .setting-group label {
     display: block;
     margin-bottom: 8px;
@@ -761,35 +856,111 @@ textarea.setting-input {
     }
 }
 
+/* Dropdown Menu */
+.dropdown-menu {
+    position: absolute;
+    top: 65px;
+    right: 18px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 8px;
+    min-width: 180px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 1000;
+}
+
+.dropdown-menu.show {
+    display: flex;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-family: var(--font-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.menu-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.menu-item svg {
+    flex-shrink: 0;
+}
+
+.menu-item:last-child:hover {
+    background: rgba(255, 71, 87, 0.1);
+    color: var(--accent-red);
+}
+
+.menu-item:last-child:hover svg {
+    stroke: var(--accent-red);
+}
+
 @media (max-width: 768px) {
-    /* Compact header */
+    /* Mobile header - single line layout */
     .header {
         padding: 12px 15px;
-        flex-direction: column;
-        gap: 10px;
-        align-items: flex-start;
-    }
-    
-    .header h1 {
-        font-size: 14px;
-    }
-    
-    .header-right {
-        width: 100%;
+        flex-direction: row;
+        gap: 0;
+        align-items: center;
         justify-content: space-between;
     }
-    
+
+    .header h1 {
+        font-size: 16px;
+    }
+
+    .header-left {
+        gap: 8px;
+    }
+
+    .header-right {
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .timestamp {
+        font-size: 11px;
+    }
+
+    .icon-btn {
+        width: 32px;
+        height: 32px;
+    }
+
+    .dropdown-menu {
+        top: 58px;
+        right: 15px;
+    }
+
     /* Metrics in 2x2 grid */
     .account-summary {
         grid-template-columns: repeat(2, 1fr);
         gap: 9px;
         padding: 9px 12px;
     }
-    
+
     .summary-item .value {
         font-size: 18px;
     }
-    
+
     /* MAIN CONTENT: Reorder panels */
     .main-content {
         display: flex;
@@ -797,17 +968,17 @@ textarea.setting-input {
         padding: 12px 15px;
         gap: 15px;
     }
-    
+
     /* Positions first */
     .panel {
         order: 1;
     }
-    
+
     /* Console second */
     .console-panel {
         order: 2;
     }
-    
+
     /* Compact position cards */
     .position,
     .trade {
@@ -815,13 +986,13 @@ textarea.setting-input {
         gap: 10px;
         padding: 12px;
     }
-    
+
     /* Smaller buttons */
     .btn {
         padding: 8px 14px;
         font-size: 12px;
     }
-    
+
     .btn-small {
         padding: 5px 10px;
         font-size: 11px;

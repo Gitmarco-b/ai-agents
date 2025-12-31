@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌙 AI Trading Dashboard</title>
+    <title>AI Trading Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -14,57 +14,38 @@
         <!-- Header with Controls -->
         <header class="header">
             <div class="header-left">
-                <h1>🌙 AI Trading Dashboard</h1>
-                <span class="agent-badge" id="agent-badge">Ready</span>
+                <h1>AI Trading</h1>
+                <span class="agent-badge" id="agent-badge">ready</span>
             </div>
             <div class="header-right">
                 <span class="timestamp" id="timestamp">--:--:--</span>
-                <select id="timezone-select" class="timezone-select" onchange="updateTimezone()">
-                    <option value="local">Local Time</option>
-                    <option value="UTC">(GMT+0) UTC</option>
-                    <optgroup label="Americas">
-                        <option value="America/New_York">(GMT-5) New York</option>
-                        <option value="America/Chicago">(GMT-6) Chicago</option>
-                        <option value="America/Denver">(GMT-7) Denver</option>
-                        <option value="America/Los_Angeles">(GMT-8) Los Angeles</option>
-                        <option value="America/Toronto">(GMT-5) Toronto</option>
-                        <option value="America/Sao_Paulo">(GMT-3) São Paulo</option>
-                        <option value="America/Mexico_City">(GMT-6) Mexico City</option>
-                    </optgroup>
-                    <optgroup label="Europe">
-                        <option value="Europe/London">(GMT+0) London</option>
-                        <option value="Europe/Berlin">(GMT+1) Berlin</option>
-                        <option value="Europe/Zurich">(GMT+1) Zurich</option>
-                        <option value="Europe/Paris">(GMT+1) Paris</option>
-                        <option value="Europe/Amsterdam">(GMT+1) Amsterdam</option>
-                        <option value="Europe/Stockholm">(GMT+1) Stockholm</option>
-                        <option value="Europe/Moscow">(GMT+3) Moscow</option>
-                        <option value="Europe/Istanbul">(GMT+3) Istanbul</option>
-                    </optgroup>
-                    <optgroup label="Asia">
-                        <option value="Asia/Dubai">(GMT+4) Dubai</option>
-                        <option value="Asia/Singapore">(GMT+8) Singapore</option>
-                        <option value="Asia/Hong_Kong">(GMT+8) Hong Kong</option>
-                        <option value="Asia/Shanghai">(GMT+8) Shanghai</option>
-                        <option value="Asia/Tokyo">(GMT+9) Tokyo</option>
-                        <option value="Asia/Seoul">(GMT+9) Seoul</option>
-                        <option value="Asia/Bangkok">(GMT+7) Bangkok</option>
-                        <option value="Asia/Mumbai">(GMT+5:30) Mumbai</option>
-                    </optgroup>
-                    <optgroup label="Pacific">
-                        <option value="Australia/Sydney">(GMT+11) Sydney</option>
-                        <option value="Australia/Melbourne">(GMT+11) Melbourne</option>
-                        <option value="Pacific/Auckland">(GMT+13) Auckland</option>
-                    </optgroup>
-                </select>
-                <button class="btn btn-settings" onclick="openSettings()" title="Settings">⚙️ Settings</button>
-                <button class="btn btn-run" id="run-btn" onclick="runAgent()">▶ RUN</button>
-                <button class="btn btn-running" id="running-indicator" style="display:none;" onclick="stopAgent()" title="Click to stop agent">
-                    <span class="pulse-dot"></span> Running
+                <button class="icon-btn" id="run-btn" onclick="runAgent()" title="Run Agent">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                 </button>
-                <button class="btn btn-logout" onclick="logout()">Logout</button>
+                <button class="icon-btn icon-btn-stop" id="pause-btn" style="display:none;" onclick="stopAgent()" title="Stop Agent">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                </button>
+                <button class="icon-btn" onclick="toggleMenu()" title="Menu">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                </button>
             </div>
         </header>
+
+        <!-- Dropdown Menu -->
+        <div id="dropdown-menu" class="dropdown-menu">
+            <button class="menu-item" onclick="openTimezoneModal();toggleMenu();">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <span>Timezone</span>
+            </button>
+            <button class="menu-item" onclick="openSettings();toggleMenu();">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v6m0 6v6m9.22-15.22l-4.24 4.24m-5.96 5.96l-4.24 4.24m16.48 0l-4.24-4.24m-5.96-5.96L2.78 2.78"></path></svg>
+                <span>Settings</span>
+            </button>
+            <button class="menu-item" onclick="openAccountModal();toggleMenu();">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                <span>Account</span>
+            </button>
+        </div>
 
         <!-- Account Summary -->
         <div class="account-summary">
@@ -148,34 +129,205 @@
                 <button class="modal-close" onclick="closeSettings()">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="setting-group">
-                    <label for="exchange-select">Exchange</label>
-                    <select id="exchange-select" class="setting-input">
-                        <option value="HYPERLIQUID">HyperLiquid</option>
-                        <option value="ASTER">Aster</option>
-                        <option value="SOLANA">Solana</option>
-                    </select>
+                <!-- Line 1: Timeframe and Days Back -->
+                <div class="setting-row">
+                    <div class="setting-group half">
+                        <label for="timeframe-select">Timeframe</label>
+                        <select id="timeframe-select" class="setting-input">
+                            <option value="5m">5 minutes</option>
+                            <option value="15m" selected>15 minutes</option>
+                            <option value="30m">30 minutes</option>
+                            <option value="1h">1 hour</option>
+                        </select>
+                    </div>
+                    <div class="setting-group half">
+                        <label for="days-back-select">Days Back</label>
+                        <select id="days-back-select" class="setting-input">
+                            <option value="1">1 day</option>
+                            <option value="2">2 days</option>
+                            <option value="3" selected>3 days</option>
+                        </select>
+                    </div>
                 </div>
 
+                <!-- Line 2: AI Provider and Model -->
+                <div class="setting-row">
+                    <div class="setting-group half">
+                        <label for="ai-provider-select">AI Provider</label>
+                        <select id="ai-provider-select" class="setting-input" onchange="updateModelOptions()">
+                            <option value="anthropic" selected>Claude (Anthropic)</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="groq">Groq</option>
+                            <option value="gemini">Google Gemini</option>
+                            <option value="ollama">Ollama (Local)</option>
+                        </select>
+                    </div>
+                    <div class="setting-group half">
+                        <label for="model-select">Model</label>
+                        <select id="model-select" class="setting-input">
+                            <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                            <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                            <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Line 3: Swarm Mode and Exchange -->
+                <div class="setting-row">
+                    <div class="setting-group half">
+                        <label for="swarm-mode-select">Mode</label>
+                        <select id="swarm-mode-select" class="setting-input">
+                            <option value="single" selected>Single Agent</option>
+                            <option value="swarm">Swarm Mode</option>
+                        </select>
+                    </div>
+                    <div class="setting-group half">
+                        <label for="exchange-select">Exchange</label>
+                        <select id="exchange-select" class="setting-input">
+                            <option value="HYPERLIQUID" selected>HyperLiquid</option>
+                            <option value="ASTER">Aster</option>
+                            <option value="SOLANA">Solana</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Line 4: Monitored Tokens -->
                 <div class="setting-group">
                     <label for="tokens-input">Monitored Tokens (comma-separated)</label>
-                    <textarea id="tokens-input" class="setting-input" rows="3" placeholder="ETH, BTC, SOL, AAVE"></textarea>
-                </div>
-
-                <div class="setting-group">
-                    <label for="model-select">AI Model</label>
-                    <select id="model-select" class="setting-input">
-                        <option value="claude-3-haiku-20240307">Claude 3 Haiku (Fast)</option>
-                        <option value="claude-3-sonnet-20240229">Claude 3 Sonnet (Balanced)</option>
-                        <option value="claude-3-opus-20240229">Claude 3 Opus (Powerful)</option>
-                        <option value="gpt-4">GPT-4</option>
-                        <option value="deepseek-chat">DeepSeek</option>
-                        <option value="groq">Groq</option>
-                    </select>
+                    <textarea id="tokens-input" class="setting-input" rows="2" placeholder="ETH, BTC, SOL, AAVE, FARTCOIN, LINK, LTC"></textarea>
                 </div>
 
                 <div class="setting-group">
                     <button class="btn btn-run" style="width: 100%;" onclick="saveSettings()">Save Settings</button>
+                </div>
+
+                <!-- Internal Notes for Future Development -->
+                <!--
+                TODO: Future Features to Add
+
+                AI SETTINGS SECTION:
+                - Add input fields for users to manage their own API keys:
+                  * ANTHROPIC_KEY (Claude API key)
+                  * OPENAI_KEY (OpenAI API key)
+                  * GEMINI_KEY (Google Gemini API key)
+                  * GROQ_API_KEY (Groq API key)
+                  * DEEPSEEK_KEY (DeepSeek API key)
+                - Store keys securely (encrypted in database or environment)
+                - Validate keys before saving
+                - Show masked keys in UI (e.g., "sk-...xyz123")
+
+                USER SETTINGS SECTION:
+                - Allow users to update their credentials:
+                  * Username field (with validation)
+                  * Email field (with email validation)
+                  * Password field (with strength requirements)
+                  * Confirm Password field
+                - Add user avatar upload:
+                  * Image upload button
+                  * Preview uploaded image
+                  * Crop/resize functionality
+                  * Store in /static/avatars/ or cloud storage
+                  * Default avatar if none uploaded
+                - Add "Update Profile" button
+                - Show success/error messages after update
+                -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Timezone Modal -->
+    <div id="timezone-modal" class="modal" onclick="closeTimezoneModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>Timezone</h2>
+                <button class="modal-close" onclick="closeTimezoneModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label for="timezone-select">Select Timezone</label>
+                    <select id="timezone-select" class="setting-input">
+                        <option value="local">Local Time</option>
+                        <option value="UTC">(GMT+0) UTC</option>
+                        <optgroup label="Americas">
+                            <option value="America/New_York">(GMT-5) New York</option>
+                            <option value="America/Chicago">(GMT-6) Chicago</option>
+                            <option value="America/Denver">(GMT-7) Denver</option>
+                            <option value="America/Los_Angeles">(GMT-8) Los Angeles</option>
+                            <option value="America/Toronto">(GMT-5) Toronto</option>
+                            <option value="America/Sao_Paulo">(GMT-3) São Paulo</option>
+                            <option value="America/Mexico_City">(GMT-6) Mexico City</option>
+                        </optgroup>
+                        <optgroup label="Europe">
+                            <option value="Europe/London">(GMT+0) London</option>
+                            <option value="Europe/Berlin">(GMT+1) Berlin</option>
+                            <option value="Europe/Zurich">(GMT+1) Zurich</option>
+                            <option value="Europe/Paris">(GMT+1) Paris</option>
+                            <option value="Europe/Amsterdam">(GMT+1) Amsterdam</option>
+                            <option value="Europe/Stockholm">(GMT+1) Stockholm</option>
+                            <option value="Europe/Moscow">(GMT+3) Moscow</option>
+                            <option value="Europe/Istanbul">(GMT+3) Istanbul</option>
+                        </optgroup>
+                        <optgroup label="Asia">
+                            <option value="Asia/Dubai">(GMT+4) Dubai</option>
+                            <option value="Asia/Singapore">(GMT+8) Singapore</option>
+                            <option value="Asia/Hong_Kong">(GMT+8) Hong Kong</option>
+                            <option value="Asia/Shanghai">(GMT+8) Shanghai</option>
+                            <option value="Asia/Tokyo">(GMT+9) Tokyo</option>
+                            <option value="Asia/Seoul">(GMT+9) Seoul</option>
+                            <option value="Asia/Bangkok">(GMT+7) Bangkok</option>
+                        </optgroup>
+                        <optgroup label="Pacific">
+                            <option value="Australia/Sydney">(GMT+11) Sydney</option>
+                            <option value="Australia/Melbourne">(GMT+11) Melbourne</option>
+                            <option value="Pacific/Auckland">(GMT+13) Auckland</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <button class="btn btn-run" style="width: 100%;" onclick="confirmTimezone()">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Modal -->
+    <div id="account-modal" class="modal" onclick="closeAccountModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>Account</h2>
+                <button class="modal-close" onclick="closeAccountModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- User Summary -->
+                <div class="account-summary-box">
+                    <div class="account-avatar">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                    </div>
+                    <div class="account-info">
+                        <h3 id="account-username">Loading...</h3>
+                        <p class="account-email" id="account-email">user@example.com</p>
+                    </div>
+                </div>
+
+                <!-- PnL Summary -->
+                <div class="account-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">All-Time P&L</span>
+                        <span class="stat-value pnl" id="account-total-pnl">$0.00</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Current AI Model</span>
+                        <span class="stat-value" id="account-current-model">Claude 3 Haiku</span>
+                    </div>
+                </div>
+
+                <!-- Logout Button -->
+                <div class="setting-group">
+                    <button class="btn btn-logout" style="width: 100%;" onclick="logout()">Logout</button>
                 </div>
             </div>
         </div>

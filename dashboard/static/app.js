@@ -45,11 +45,11 @@ async function updateDashboard() {
         // If agent is actively executing, do lightweight update
         if (agentStatus.executing) {
             console.log('[Dashboard] Agent executing - lightweight update only');
-            
+
             // Only update timestamp and agent badge (no API calls)
             updateTimestamp();
-            updateAgentBadge(agentStatus.running);
-            
+            updateAgentBadge(agentStatus.running, agentStatus.executing);
+
             return; // Skip heavy updates
         }
         
@@ -165,23 +165,23 @@ function updateTimestamp() {
 function updateAgentBadge(isRunning, isExecuting = false) {
     const badge = document.getElementById('agent-badge');
     const runBtn = document.getElementById('run-btn');
-    const runningIndicator = document.getElementById('running-indicator');
+    const pauseBtn = document.getElementById('pause-btn');
 
     if (isExecuting) {
-        badge.textContent = 'Analyzing';
+        badge.textContent = 'RUNNING';
         badge.className = 'agent-badge running';
         runBtn.style.display = 'none';
-        runningIndicator.style.display = 'flex';
+        pauseBtn.style.display = 'inline-flex';
     } else if (isRunning) {
-        badge.textContent = 'Waiting';
+        badge.textContent = 'stand by';
         badge.className = 'agent-badge running';
         runBtn.style.display = 'none';
-        runningIndicator.style.display = 'flex';
+        pauseBtn.style.display = 'inline-flex';
     } else {
-        badge.textContent = 'Ready';
+        badge.textContent = 'ready';
         badge.className = 'agent-badge ready';
-        runBtn.style.display = 'inline-block';
-        runningIndicator.style.display = 'none';
+        runBtn.style.display = 'inline-flex';
+        pauseBtn.style.display = 'none';
     }
 }
 
@@ -374,10 +374,10 @@ async function loadAgentState() {
         const data = await response.json();
         
         console.log('Agent state loaded:', data);
-        
+
         // Update UI based on persisted state
-        updateAgentBadge(data.running);
-        
+        updateAgentBadge(data.running, false);  // Not executing on initial load
+
         // Log last action info
         if (data.last_started) {
             const lastStart = new Date(data.last_started).toLocaleTimeString();
@@ -497,22 +497,41 @@ function loadSettings() {
     // Load settings from localStorage
     const exchange = localStorage.getItem('exchange') || 'HYPERLIQUID';
     const tokens = localStorage.getItem('tokens') || 'ETH, BTC, SOL, AAVE, LINK, LTC, FARTCOIN';
+    const timeframe = localStorage.getItem('timeframe') || '15m';
+    const daysBack = localStorage.getItem('days_back') || '3';
+    const aiProvider = localStorage.getItem('ai_provider') || 'anthropic';
     const model = localStorage.getItem('ai_model') || 'claude-3-haiku-20240307';
+    const swarmMode = localStorage.getItem('swarm_mode') || 'single';
 
     document.getElementById('exchange-select').value = exchange;
     document.getElementById('tokens-input').value = tokens;
+    document.getElementById('timeframe-select').value = timeframe;
+    document.getElementById('days-back-select').value = daysBack;
+    document.getElementById('ai-provider-select').value = aiProvider;
+    document.getElementById('swarm-mode-select').value = swarmMode;
+
+    // Update model options based on provider
+    updateModelOptions();
     document.getElementById('model-select').value = model;
 }
 
 async function saveSettings() {
     const exchange = document.getElementById('exchange-select').value;
     const tokens = document.getElementById('tokens-input').value;
+    const timeframe = document.getElementById('timeframe-select').value;
+    const daysBack = document.getElementById('days-back-select').value;
+    const aiProvider = document.getElementById('ai-provider-select').value;
     const model = document.getElementById('model-select').value;
+    const swarmMode = document.getElementById('swarm-mode-select').value;
 
     // Save to localStorage
     localStorage.setItem('exchange', exchange);
     localStorage.setItem('tokens', tokens);
+    localStorage.setItem('timeframe', timeframe);
+    localStorage.setItem('days_back', daysBack);
+    localStorage.setItem('ai_provider', aiProvider);
     localStorage.setItem('ai_model', model);
+    localStorage.setItem('swarm_mode', swarmMode);
 
     // Send to backend API
     try {
@@ -524,7 +543,11 @@ async function saveSettings() {
             body: JSON.stringify({
                 exchange: exchange,
                 tokens: tokens.split(',').map(t => t.trim()),
-                ai_model: model
+                timeframe: timeframe,
+                days_back: parseInt(daysBack),
+                ai_provider: aiProvider,
+                ai_model: model,
+                swarm_mode: swarmMode
             })
         });
 
@@ -668,6 +691,153 @@ function renderPortfolioChart(history) {
                     filter="drop-shadow(0 0 4px ${lineColor})"/>
         </svg>
     `;
+}
+
+// ============================================================================
+// MENU TOGGLE
+// ============================================================================
+
+function toggleMenu() {
+    const menu = document.getElementById('dropdown-menu');
+    menu.classList.toggle('show');
+}
+
+// Close menu when clicking outside
+document.addEventListener('click', (event) => {
+    const menu = document.getElementById('dropdown-menu');
+    const menuButton = event.target.closest('.icon-btn[onclick*="toggleMenu"]');
+
+    if (!menu.contains(event.target) && !menuButton) {
+        menu.classList.remove('show');
+    }
+});
+
+// ============================================================================
+// TIMEZONE MODAL
+// ============================================================================
+
+function openTimezoneModal() {
+    document.getElementById('timezone-modal').classList.add('show');
+    // Load current timezone
+    const savedTimezone = localStorage.getItem('preferred_timezone') || 'local';
+    document.getElementById('timezone-select').value = savedTimezone;
+}
+
+function closeTimezoneModal(event) {
+    if (!event || event.target.id === 'timezone-modal' || event.target.classList.contains('modal-close')) {
+        document.getElementById('timezone-modal').classList.remove('show');
+    }
+}
+
+function confirmTimezone() {
+    const select = document.getElementById('timezone-select');
+    const selectedZone = select.value;
+    localStorage.setItem('preferred_timezone', selectedZone);
+    updateTimestamp(); // Refresh timestamp immediately
+    updateConsole(); // Refresh console with new timezone
+    closeTimezoneModal();
+}
+
+// ============================================================================
+// ACCOUNT MODAL
+// ============================================================================
+
+function openAccountModal() {
+    const modal = document.getElementById('account-modal');
+    modal.classList.add('show');
+
+    // Load account data
+    const username = sessionStorage.getItem('username') || 'User';
+    const email = sessionStorage.getItem('email') || 'user@example.com';
+
+    document.getElementById('account-username').textContent = username;
+    document.getElementById('account-email').textContent = email;
+
+    // Load current model
+    const currentModel = localStorage.getItem('ai_model') || 'claude-3-haiku-20240307';
+    const modelNames = {
+        'claude-3-haiku-20240307': 'Claude 3 Haiku',
+        'claude-3-sonnet-20240229': 'Claude 3 Sonnet',
+        'claude-3-opus-20240229': 'Claude 3 Opus',
+        'gpt-4': 'GPT-4',
+        'deepseek-chat': 'DeepSeek',
+        'groq': 'Groq'
+    };
+    document.getElementById('account-current-model').textContent = modelNames[currentModel] || currentModel;
+
+    // Calculate all-time PnL from history
+    fetch('/api/history')
+        .then(response => response.json())
+        .then(history => {
+            if (history && history.length > 0) {
+                const startBalance = history[0].balance;
+                const currentBalance = history[history.length - 1].balance;
+                const totalPnl = currentBalance - startBalance;
+
+                const pnlEl = document.getElementById('account-total-pnl');
+                pnlEl.textContent = `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}`;
+                pnlEl.className = `stat-value pnl ${totalPnl >= 0 ? 'positive' : 'negative'}`;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading PnL:', error);
+        });
+}
+
+function closeAccountModal(event) {
+    if (!event || event.target.id === 'account-modal' || event.target.classList.contains('modal-close')) {
+        document.getElementById('account-modal').classList.remove('show');
+    }
+}
+
+// ============================================================================
+// MODEL OPTIONS UPDATE
+// ============================================================================
+
+function updateModelOptions() {
+    const provider = document.getElementById('ai-provider-select').value;
+    const modelSelect = document.getElementById('model-select');
+
+    // Define models for each provider
+    const models = {
+        'anthropic': [
+            { value: 'claude-3-haiku-20240307', text: 'Claude 3 Haiku' },
+            { value: 'claude-3-sonnet-20240229', text: 'Claude 3 Sonnet' },
+            { value: 'claude-3-opus-20240229', text: 'Claude 3 Opus' }
+        ],
+        'openai': [
+            { value: 'gpt-4', text: 'GPT-4' },
+            { value: 'gpt-4-turbo', text: 'GPT-4 Turbo' },
+            { value: 'gpt-3.5-turbo', text: 'GPT-3.5 Turbo' }
+        ],
+        'deepseek': [
+            { value: 'deepseek-chat', text: 'DeepSeek Chat' },
+            { value: 'deepseek-coder', text: 'DeepSeek Coder' }
+        ],
+        'groq': [
+            { value: 'llama3-70b-8192', text: 'Llama 3 70B' },
+            { value: 'mixtral-8x7b-32768', text: 'Mixtral 8x7B' }
+        ],
+        'gemini': [
+            { value: 'gemini-pro', text: 'Gemini Pro' },
+            { value: 'gemini-pro-vision', text: 'Gemini Pro Vision' }
+        ],
+        'ollama': [
+            { value: 'llama2', text: 'Llama 2' },
+            { value: 'mistral', text: 'Mistral' },
+            { value: 'codellama', text: 'Code Llama' }
+        ]
+    };
+
+    // Clear and populate model select
+    modelSelect.innerHTML = '';
+    const providerModels = models[provider] || [];
+    providerModels.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.value;
+        option.textContent = model.text;
+        modelSelect.appendChild(option);
+    });
 }
 
 console.log('✅ Dashboard ready');

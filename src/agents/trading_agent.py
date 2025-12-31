@@ -151,7 +151,7 @@ LONG_ONLY = False
 # 🤖 SINGLE MODEL SETTINGS
 AI_MODEL_TYPE = 'gemini' 
 AI_MODEL_NAME = 'gemini-2.5-pro'  # Fast Gemini 2.5 model
-AI_TEMPERATURE = 0.6   
+AI_TEMPERATURE = 0.3   
 AI_MAX_TOKENS = 3000   
 
 # 💰 POSITION SIZING & RISK MANAGEMENT
@@ -170,8 +170,8 @@ max_usd_order_size = 3
 CASH_PERCENTAGE = 10
 
 # 📊 MARKET DATA COLLECTION
-DAYSBACK_4_DATA = 2              
-DATA_TIMEFRAME = '30m'            
+DAYSBACK_4_DATA = 1              
+DATA_TIMEFRAME = '5m'            
 SAVE_OHLCV_DATA = False          
 
 # ⚡ TRADING EXECUTION SETTINGS
@@ -179,7 +179,8 @@ slippage = 199
 SLEEP_BETWEEN_RUNS_MINUTES = 60  
 
 # 🎯 TOKEN CONFIGURATION
-address = "ACCOUNT_ADDRESS" 
+# Note: Account address is loaded from .env via os.getenv("ACCOUNT_ADDRESS")
+# or from self.account.address in TradingAgent.__init__()
 
 # For SOLANA exchange
 USDC_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" 
@@ -196,6 +197,7 @@ SYMBOLS = [
     'AAVE',       # Aave
     'LINK',       # Chainlink
     'LTC',        # Litecoin
+    'HYPE',       # Hyperliquid Exchange Token
     'FARTCOIN',   # FartCoin (for the fun)
 ]
 
@@ -893,6 +895,8 @@ Return ONLY valid JSON with the following structure:
                 confidence = decision.get("confidence", 0)
                 color = "red" if action.upper() == "CLOSE" else "green"
                 cprint(f"   {symbol:<10} → {action:<6} | {reason}", color)
+                # Short format for dashboard: "SYMBOL -> ACTION"
+                add_console_log(f"{symbol} -> {action}", "info")
 
                 # Short format for dashboard
                 if action.upper() == "CLOSE":
@@ -1025,10 +1029,8 @@ Return ONLY valid JSON with the following structure:
 
                 cprint(f"✅ Swarm analysis complete for {token[:8]}!", "green")
 
-                # Add short summary for dashboard
-                short_reasoning = reasoning.split('\n')[0][:40] if reasoning else "No reasoning"
-                summary = f"{action}, {short_reasoning.lower()} | {confidence}%"
-                add_console_log(f"   → {summary}", "info")
+                # Short format for dashboard: "TOKEN -> ACTION | CONFIDENCE%"
+                add_console_log(f"{token} -> {action} | {confidence}%", "info")
 
                 return swarm_result
 
@@ -1088,10 +1090,8 @@ Return ONLY valid JSON with the following structure:
 
                 add_console_log(f"🎯 AI Analysis Complete for {token[:4]}!", "success")
 
-                # Add short summary for dashboard
-                short_reasoning = reasoning.split('\n')[0][:40] if reasoning else "No reasoning"
-                summary = f"{action}, {short_reasoning.lower()} | {confidence}%"
-                add_console_log(f"   → {summary}", "info")
+                # Short format for dashboard: "TOKEN -> ACTION | CONFIDENCE%"
+                add_console_log(f"{token} -> {action} | {confidence}%", "info")
 
                 return response
 
@@ -1251,14 +1251,16 @@ Trading Recommendations (BUY signals only):
                 k: float(v) for k, v in allocations.items()
                 if isinstance(v, (int, float, str)) and str(v).replace('.', '', 1).isdigit()
             }
-            total_margin = sum(valid_allocations.values())
+            # CRITICAL FIX: Exclude USDC cash buffer from total_margin calculation
+            total_margin = sum(v for k, v in valid_allocations.items() if k != USDC_ADDRESS)
             target_margin = account_balance * (MAX_POSITION_PERCENTAGE / 100)
-            
-            # Scale allocations to use 90% of equity
+
+            # Scale allocations to use 90% of equity (excluding USDC cash buffer)
             if total_margin > 0:
                 scale_factor = target_margin / total_margin
                 for k in valid_allocations.keys():
-                    valid_allocations[k] = round(valid_allocations[k] * scale_factor, 2)
+                    if k != USDC_ADDRESS:  # Don't scale USDC cash buffer
+                        valid_allocations[k] = round(valid_allocations[k] * scale_factor, 2)
             
             # Enforce minimum trade size (≥ $12 notional)
             min_margin = 12 / LEVERAGE
@@ -1332,44 +1334,50 @@ Trading Recommendations (BUY signals only):
 
                     target_allocation = amount
 
-                    print(f"🎯 Target allocation: ${target_allocation:.2f} USD")
-                    print(f"📊 Current position: ${current_position:.2f} USD")
-                    add_console_log(f"📊 {token} - Current: ${current_position:.2f}, Target: ${target_allocation:.2f}", "info")
-                    
-                    effective_value = float(target_allocation) * LEVERAGE
-                    print(f"⚡ Trade exposure (with {LEVERAGE}x): ${effective_value:.2f}")
-                    add_console_log(f"⚡ {token} exposure with {LEVERAGE}x leverage: ${effective_value:.2f}", "info")
+                    print(f"🎯 Target margin allocation: ${target_allocation:.2f} USD")
+                    print(f"📊 Current notional position: ${current_position:.2f} USD")
 
-                    if current_position < target_allocation:
+                    # Calculate effective trade size with leverage
+                    # For HyperLiquid: if target is $4 with 20x leverage, we buy $80 notional (only needs $4 margin)
+                    # For Solana: no leverage, so effective_value = target_allocation
+                    if EXCHANGE in ["HYPERLIQUID", "ASTER"]:
+                        effective_value = float(target_allocation) * LEVERAGE
+                        print(f"⚡ Target notional (with {LEVERAGE}x): ${effective_value:.2f} (margin: ${target_allocation:.2f})")
+                        add_console_log(f"⚡ {token} target: ${effective_value:.2f} notional | ${target_allocation:.2f} margin", "info")
+                    else:
+                        effective_value = float(target_allocation)  # Solana has no leverage
+                        print(f"💰 Trade size: ${effective_value:.2f}")
+
+                    # Compare current notional position against target notional position
+                    if current_position < (effective_value * 0.97):  # 97% threshold to avoid small adjustments
                         print(f"✨ Executing entry for {token}")
                         add_console_log(f"✨ Opening {token} position", "info")
 
                         if EXCHANGE == "HYPERLIQUID":
-                            cprint(f"🔵 HyperLiquid: ai_entry({token}, ${amount:.2f}, leverage={LEVERAGE})", "cyan")
-                            add_console_log(f"🔵 Executing: ai_entry({token}, ${amount:.2f}, {LEVERAGE}x)", "info")
-                            n.ai_entry(token, amount, leverage=LEVERAGE, account=self.account)
+                            cprint(f"🔵 HyperLiquid: ai_entry({token}, ${effective_value:.2f}, leverage={LEVERAGE})", "cyan")
+                            add_console_log(f"🔵 Executing: ai_entry({token}, ${effective_value:.2f}, {LEVERAGE}x)", "info")
+                            n.ai_entry(token, effective_value, leverage=LEVERAGE, account=self.account)
                         elif EXCHANGE == "ASTER":
-                            cprint(f"🟣 Aster: ai_entry({token}, ${amount:.2f}, leverage={LEVERAGE})", "cyan")
-                            add_console_log(f"🟣 Executing: ai_entry({token}, ${amount:.2f}, {LEVERAGE}x)", "info")
-                            n.ai_entry(token, amount, leverage=LEVERAGE)
+                            cprint(f"🟣 Aster: ai_entry({token}, ${effective_value:.2f}, leverage={LEVERAGE})", "cyan")
+                            add_console_log(f"🟣 Executing: ai_entry({token}, ${effective_value:.2f}, {LEVERAGE}x)", "info")
+                            n.ai_entry(token, effective_value, leverage=LEVERAGE)
                         else:
-                            cprint(f"🟢 Solana: ai_entry({token}, ${amount:.2f})", "cyan")
-                            add_console_log(f"🟢 Executing: ai_entry({token}, ${amount:.2f})", "info")
-                            n.ai_entry(token, amount)
+                            cprint(f"🟢 Solana: ai_entry({token}, ${effective_value:.2f})", "cyan")
+                            add_console_log(f"🟢 Executing: ai_entry({token}, ${effective_value:.2f})", "info")
+                            n.ai_entry(token, effective_value)
 
                         print(f"✅ Entry complete for {token}")
                         add_console_log(f"✅ {token} position opened successfully", "success")
 
                         # Log position open (using shared logging utility)
                         try:
-                            # Determine position value (with leverage)
-                            notional_value = float(amount) * LEVERAGE
-                            log_position_open(token, "LONG", notional_value)
+                            # Log the actual notional value opened
+                            log_position_open(token, "LONG", effective_value)
                         except Exception:
                             pass
-                    elif current_position > target_allocation:
+                    elif current_position > (effective_value * 1.03):  # 103% threshold to avoid small adjustments
                         # Need to REDUCE position
-                        reduction_amount = current_position - target_allocation
+                        reduction_amount = current_position - effective_value
 
                         if target_allocation == 0:
                             # Full close
