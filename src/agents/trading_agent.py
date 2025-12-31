@@ -191,9 +191,11 @@ except Exception as e:
 # 🔧 TRADING AGENT CONFIGURATION
 # ============================================================================
 from eth_account import Account
+from src.config import EXCHANGE as CONFIG_EXCHANGE
 
-# 🦈 EXCHANGE SELECTION
-EXCHANGE = "HYPERLIQUID"  # Options: "ASTER", "HYPERLIQUID", "SOLANA"
+# 🦈 EXCHANGE SELECTION - Import from config.py
+# Convert to uppercase for consistency with checks throughout this file
+EXCHANGE = CONFIG_EXCHANGE.upper() if CONFIG_EXCHANGE else "HYPERLIQUID"
 
 # 🌊 AI MODE SELECTION
 USE_SWARM_MODE = False  # True = Swarm Mode (all Models), False = Single Model

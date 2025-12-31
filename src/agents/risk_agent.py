@@ -65,23 +65,13 @@ class RiskAgent(BaseAgent):
     def __init__(self):
         """Initialize Moon Dev's Risk Agent 🛡️"""
         super().__init__('risk')  # Initialize base agent with type
-        
-        # Set AI parameters - use config values unless overridden
-        self.ai_model = AI_MODEL if AI_MODEL else config.AI_MODEL
-        self.ai_temperature = AI_TEMPERATURE if AI_TEMPERATURE > 0 else config.AI_TEMPERATURE
-        self.ai_max_tokens = AI_MAX_TOKENS if AI_MAX_TOKENS > 0 else config.AI_MAX_TOKENS
-        
+
+        # Set AI parameters from config
+        self.ai_model = config.AI_MODEL
+        self.ai_temperature = config.AI_TEMPERATURE
+        self.ai_max_tokens = config.AI_MAX_TOKENS
+
         print(f"🤖 Using AI Model: {self.ai_model}")
-        if AI_MODEL or AI_TEMPERATURE > 0 or AI_MAX_TOKENS > 0:
-            print("⚠️ Note: Using some override settings instead of config.py defaults")
-            if AI_MODEL:
-                print(f"  - Model: {AI_MODEL}")
-            if AI_TEMPERATURE > 0:
-                print(f"  - Temperature: {AI_TEMPERATURE}")
-            if AI_MAX_TOKENS > 0:
-                print(f"  - Max Tokens: {AI_MAX_TOKENS}")
-                
-        load_dotenv()
         
         # Get API keys
         openai_key = os.getenv("OPENAI_KEY")
