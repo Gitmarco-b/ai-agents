@@ -217,8 +217,8 @@ TP_THRESHOLD = 0.5
 
 # 🤖 SINGLE MODEL SETTINGS
 AI_MODEL_TYPE = 'gemini' 
-AI_MODEL_NAME = 'gemini-3-flash'  # Fast Gemini 3 model
-AI_TEMPERATURE = 0.7   
+AI_MODEL_NAME = 'gemini-2.5-flash'  # Fast Gemini 2.5 model
+AI_TEMPERATURE = 0.3   
 AI_MAX_TOKENS = 3000   
 
 # 💰 POSITION SIZING & RISK MANAGEMENT
