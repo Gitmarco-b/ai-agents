@@ -33,6 +33,7 @@ sys.path.insert(0, str(BASE_DIR))
 
 # Import shared logging utility (prevents circular imports)
 from src.utils.logging_utils import add_console_log, log_queue, log_position_open
+from src.utils.settings_manager import load_settings, save_settings, validate_settings
 
 # Load environment variables
 load_dotenv()
@@ -561,25 +562,29 @@ def run_trading_agent():
 
     add_console_log("AI Trading agent started", "success")
 
+    # Load user settings
+    user_settings = load_settings()
+    add_console_log(f"Loaded settings: {user_settings.get('timeframe')} timeframe, {user_settings.get('days_back')} days, {user_settings.get('sleep_minutes')} min cycle", "info")
+
     # Import trading agent at the top of the function
     try:
-        from src.agents.trading_agent import TradingAgent, EXCHANGE, SYMBOLS, MONITORED_TOKENS, SLEEP_BETWEEN_RUNS_MINUTES
+        from src.agents.trading_agent import TradingAgent, EXCHANGE, SYMBOLS, MONITORED_TOKENS
         trading_agent_module = "src.agents.trading_agent"
     except ImportError:
         try:
-            from trading_agent import TradingAgent, EXCHANGE, SYMBOLS, MONITORED_TOKENS, SLEEP_BETWEEN_RUNS_MINUTES
+            from trading_agent import TradingAgent, EXCHANGE, SYMBOLS, MONITORED_TOKENS
             trading_agent_module = "trading_agent"
         except ImportError:
             import sys
             sys.path.insert(0, str(BASE_DIR / "src" / "agents"))
-            from trading_agent import TradingAgent, EXCHANGE, SYMBOLS, MONITORED_TOKENS, SLEEP_BETWEEN_RUNS_MINUTES
+            from trading_agent import TradingAgent, EXCHANGE, SYMBOLS, MONITORED_TOKENS
             trading_agent_module = "trading_agent (sys.path)"
 
     add_console_log("Loaded trading_agent", "info")
     add_console_log(f"Using exchange {EXCHANGE}", "info")
 
-    # Convert minutes to seconds for sleep
-    sleep_seconds = SLEEP_BETWEEN_RUNS_MINUTES * 60
+    # Convert minutes to seconds for sleep (use user setting)
+    sleep_seconds = user_settings.get('sleep_minutes', 30) * 60
 
     while True:
         # Check stop condition with lock
@@ -593,8 +598,14 @@ def run_trading_agent():
             # Capture start time
             cycle_start = time.time()
 
-            # Create agent instance
-            agent = TradingAgent()
+            # Reload settings in case they changed
+            user_settings = load_settings()
+
+            # Create agent instance with user settings
+            agent = TradingAgent(
+                timeframe=user_settings.get('timeframe', '30m'),
+                days_back=user_settings.get('days_back', 2)
+            )
 
             # Get tokens list based on exchange
             if EXCHANGE in ["ASTER", "HYPERLIQUID"]:
@@ -620,7 +631,7 @@ def run_trading_agent():
 
             # Wait before next cycle
             add_console_log("✅ Finished trading cycle", "info")
-            add_console_log(f"Next cycle starts in {SLEEP_BETWEEN_RUNS_MINUTES} minutes", "info")
+            add_console_log(f"Next cycle starts in {user_settings.get('sleep_minutes', 30)} minutes", "info")
 
             # Use Event.wait() instead of blocking sleep for responsive shutdown
             if stop_event.wait(timeout=sleep_seconds):
@@ -891,19 +902,48 @@ def get_agent_status():
 @app.route('/api/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
-    """Get or update settings"""
+    """Get or update user settings"""
     if request.method == 'GET':
-        # Return current settings
+        # Load and return current settings
+        user_settings = load_settings()
         return jsonify({
-            'exchange': EXCHANGE,
-            'symbols': SYMBOLS,
-            'ai_model': os.getenv('AI_MODEL', 'claude-3-haiku-20240307')
+            'success': True,
+            'settings': user_settings
         })
     else:
-        # Update settings (save to localStorage on frontend for now)
-        data = request.get_json()
-        add_console_log(f"Settings updated: Exchange={data.get('exchange')}, Model={data.get('ai_model')}", "info")
-        return jsonify({'success': True, 'message': 'Settings saved'})
+        # Update settings
+        try:
+            data = request.get_json()
+
+            # Validate settings
+            valid, errors = validate_settings(data)
+            if not valid:
+                return jsonify({
+                    'success': False,
+                    'message': 'Invalid settings',
+                    'errors': errors
+                }), 400
+
+            # Save settings
+            if save_settings(data):
+                add_console_log(f"Settings updated: Timeframe={data.get('timeframe')}, Days Back={data.get('days_back')}, Sleep={data.get('sleep_minutes')} min", "info")
+                return jsonify({
+                    'success': True,
+                    'message': 'Settings saved successfully',
+                    'settings': data
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': 'Failed to save settings'
+                }), 500
+
+        except Exception as e:
+            print(f"❌ Error updating settings: {e}")
+            return jsonify({
+                'success': False,
+                'message': f'Error: {str(e)}'
+            }), 500
 
 
 @app.route('/health')
