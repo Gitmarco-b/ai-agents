@@ -1517,3 +1517,271 @@ textarea.setting-input {
         gap: 16px;
     }
 }
+
+/* ============================================================================
+   SECRETS MANAGEMENT (BYOK - Bring Your Own Key)
+   ============================================================================ */
+
+.secrets-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.loading-secrets,
+.error-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.error-message {
+    color: var(--accent-red);
+}
+
+.secret-item {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px 16px;
+    transition: all 0.2s ease;
+}
+
+.secret-item.configured {
+    border-left: 3px solid var(--accent-green);
+}
+
+.secret-item.not-configured {
+    border-left: 3px solid var(--text-muted);
+}
+
+.secret-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.secret-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.secret-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.secret-status {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.secret-status.configured {
+    color: var(--accent-green);
+}
+
+.secret-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.btn-secret-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-secret-action:hover {
+    background: var(--bg-primary);
+    border-color: var(--text-muted);
+    color: var(--text-primary);
+}
+
+.btn-secret-action.btn-add:hover {
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+}
+
+.btn-secret-action.btn-delete:hover {
+    border-color: var(--accent-red);
+    color: var(--accent-red);
+}
+
+.secret-input-row {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.secret-input-group {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.secret-key-input {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.5px;
+}
+
+.btn-toggle-visibility {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-toggle-visibility:hover {
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+}
+
+.secret-input-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-save {
+    background: var(--accent-green) !important;
+    color: var(--bg-primary) !important;
+    border: none !important;
+}
+
+.btn-save:hover {
+    opacity: 0.9;
+}
+
+.btn-cancel {
+    background: var(--bg-secondary) !important;
+    color: var(--text-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+.btn-cancel:hover {
+    border-color: var(--text-muted) !important;
+    color: var(--text-primary) !important;
+}
+
+.btn-docs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent !important;
+    color: var(--accent-blue, #60a5fa) !important;
+    border: 1px solid var(--accent-blue, #60a5fa) !important;
+    text-decoration: none;
+    font-size: 11px;
+}
+
+.btn-docs:hover {
+    background: rgba(96, 165, 250, 0.1) !important;
+}
+
+.secrets-footer {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.secrets-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.secrets-note svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+/* Logout button enhancement */
+.btn-logout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-logout svg {
+    opacity: 0.8;
+}
+
+/* Account stats enhancement */
+.account-stats .stat-item {
+    background: var(--bg-tertiary);
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+}
+
+.account-stats .stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    font-weight: 600;
+    display: block;
+    margin-bottom: 6px;
+}
+
+.account-stats .stat-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.account-stats .stat-value.pnl.positive {
+    color: var(--accent-green);
+}
+
+.account-stats .stat-value.pnl.negative {
+    color: var(--accent-red);
+}
+
+/* Mobile adjustments for secrets */
+@media (max-width: 768px) {
+    .secret-item {
+        padding: 10px 12px;
+    }
+
+    .secret-name {
+        font-size: 12px;
+    }
+
+    .btn-secret-action {
+        width: 28px;
+        height: 28px;
+    }
+
+    .secret-input-actions {
+        flex-wrap: wrap;
+    }
+
+    .btn-docs {
+        width: 100%;
+        justify-content: center;
+    }
+}

@@ -41,9 +41,19 @@ from src.utils.settings_manager import (
     get_hyperliquid_tokens,
     get_all_token_symbols
 )
+from src.utils.secrets_manager import (
+    get_providers_status,
+    set_api_key,
+    delete_api_key,
+    validate_api_key_format,
+    load_secrets_to_env
+)
 
 # Load environment variables
 load_dotenv()
+
+# Load user-configured API keys into environment
+load_secrets_to_env()
 
 # Initialize Flask with correct paths
 DASHBOARD_DIR = BASE_DIR / "dashboard"
@@ -1121,6 +1131,110 @@ def get_tokens():
 
     except Exception as e:
         print(f"❌ Error getting tokens: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+# ============================================================================
+# API SECRETS MANAGEMENT (BYOK - Bring Your Own Key)
+# ============================================================================
+
+@app.route('/api/secrets', methods=['GET'])
+@login_required
+def get_secrets():
+    """
+    Get status of all AI provider API keys.
+    Returns masked keys and configuration status for each provider.
+    """
+    try:
+        providers_status = get_providers_status()
+
+        return jsonify({
+            'success': True,
+            'providers': providers_status
+        })
+
+    except Exception as e:
+        print(f"❌ Error getting secrets: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/api/secrets/<provider>', methods=['POST'])
+@login_required
+def update_secret(provider):
+    """
+    Set or update API key for a specific provider.
+
+    Request body:
+    {
+        "api_key": "sk-..."
+    }
+    """
+    try:
+        data = request.get_json()
+        api_key = data.get('api_key', '').strip()
+
+        if not api_key:
+            return jsonify({
+                'success': False,
+                'message': 'API key is required'
+            }), 400
+
+        # Validate format
+        is_valid, error = validate_api_key_format(provider, api_key)
+        if not is_valid:
+            return jsonify({
+                'success': False,
+                'message': error
+            }), 400
+
+        # Save the key
+        success, error = set_api_key(provider, api_key)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'API key for {provider} saved successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': error
+            }), 500
+
+    except Exception as e:
+        print(f"❌ Error updating secret: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/api/secrets/<provider>', methods=['DELETE'])
+@login_required
+def remove_secret(provider):
+    """Delete API key for a specific provider."""
+    try:
+        success, error = delete_api_key(provider)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'API key for {provider} removed'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': error
+            }), 500
+
+    except Exception as e:
+        print(f"❌ Error removing secret: {e}")
         return jsonify({
             'success': False,
             'message': f'Error: {str(e)}'

@@ -1104,28 +1104,65 @@ function confirmTimezone() {
 // ACCOUNT MODAL
 // ============================================================================
 
+// Global state for secrets
+let providersData = {};
+
 function openAccountModal() {
     const modal = document.getElementById('account-modal');
     modal.classList.add('show');
 
+    // Reset to profile tab
+    switchAccountTab('profile');
+
     // Load account data
+    loadAccountProfile();
+}
+
+function closeAccountModal(event) {
+    if (!event || event.target.id === 'account-modal' || event.target.classList.contains('modal-close')) {
+        document.getElementById('account-modal').classList.remove('show');
+    }
+}
+
+// Tab switching for account modal
+function switchAccountTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('#account-modal .settings-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+
+    // Update tab content
+    document.querySelectorAll('#account-modal .settings-tab-content').forEach(content => {
+        content.classList.toggle('active', content.id === `account-tab-${tabName}`);
+    });
+
+    // Load secrets when switching to secrets tab
+    if (tabName === 'secrets') {
+        loadSecrets();
+    }
+}
+
+// Load account profile data
+function loadAccountProfile() {
     const username = sessionStorage.getItem('username') || 'User';
     const email = sessionStorage.getItem('email') || 'user@example.com';
 
     document.getElementById('account-username').textContent = username;
     document.getElementById('account-email').textContent = email;
 
-    // Load current model
-    const currentModel = localStorage.getItem('ai_model') || 'claude-3-haiku-20240307';
-    const modelNames = {
-        'claude-3-haiku-20240307': 'Claude 3 Haiku',
-        'claude-3-sonnet-20240229': 'Claude 3 Sonnet',
-        'claude-3-opus-20240229': 'Claude 3 Opus',
-        'gpt-4': 'GPT-4',
-        'deepseek-chat': 'DeepSeek',
-        'groq': 'Groq'
-    };
-    document.getElementById('account-current-model').textContent = modelNames[currentModel] || currentModel;
+    // Load current model from settings
+    fetch('/api/settings')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.settings) {
+                const provider = data.settings.ai_provider || 'gemini';
+                const model = data.settings.ai_model || 'gemini-2.5-flash';
+                document.getElementById('account-current-model').textContent = `${provider}/${model}`;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading settings:', error);
+        });
 
     // Calculate all-time PnL from history
     fetch('/api/history')
@@ -1146,9 +1183,184 @@ function openAccountModal() {
         });
 }
 
-function closeAccountModal(event) {
-    if (!event || event.target.id === 'account-modal' || event.target.classList.contains('modal-close')) {
-        document.getElementById('account-modal').classList.remove('show');
+// ============================================================================
+// SECRETS MANAGEMENT (BYOK)
+// ============================================================================
+
+async function loadSecrets() {
+    const container = document.getElementById('secrets-list');
+    container.innerHTML = '<div class="loading-secrets">Loading API keys...</div>';
+
+    try {
+        const response = await fetch('/api/secrets');
+        const data = await response.json();
+
+        if (data.success) {
+            providersData = data.providers;
+            renderSecretsList();
+        } else {
+            container.innerHTML = '<div class="error-message">Failed to load API keys</div>';
+        }
+    } catch (error) {
+        console.error('Error loading secrets:', error);
+        container.innerHTML = '<div class="error-message">Failed to load API keys</div>';
+    }
+}
+
+function renderSecretsList() {
+    const container = document.getElementById('secrets-list');
+
+    const providersHtml = Object.entries(providersData).map(([providerId, info]) => {
+        const statusClass = info.configured ? 'configured' : 'not-configured';
+        const statusText = info.configured ? 'Configured' : 'Not configured';
+        const sourceLabel = info.source === 'env' ? '(from .env)' : '';
+
+        return `
+            <div class="secret-item ${statusClass}" data-provider="${providerId}">
+                <div class="secret-header">
+                    <div class="secret-info">
+                        <span class="secret-name">${info.name}</span>
+                        <span class="secret-status ${statusClass}">${statusText} ${sourceLabel}</span>
+                    </div>
+                    <div class="secret-actions">
+                        ${info.configured ? `
+                            <button class="btn-secret-action btn-view" onclick="toggleSecretInput('${providerId}')" title="Edit">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                            </button>
+                            <button class="btn-secret-action btn-delete" onclick="deleteSecret('${providerId}')" title="Delete">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            </button>
+                        ` : `
+                            <button class="btn-secret-action btn-add" onclick="toggleSecretInput('${providerId}')" title="Add">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            </button>
+                        `}
+                    </div>
+                </div>
+                <div class="secret-input-row" id="secret-input-${providerId}" style="display: none;">
+                    <div class="secret-input-group">
+                        <input type="password"
+                               class="setting-input secret-key-input"
+                               id="input-${providerId}"
+                               placeholder="${info.placeholder}"
+                               ${info.configured ? `value="${info.masked_key}"` : ''} />
+                        <button class="btn-toggle-visibility" onclick="toggleSecretVisibility('${providerId}')" title="Show/Hide">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
+                    <div class="secret-input-actions">
+                        <button class="btn btn-small btn-save" onclick="saveSecret('${providerId}')">Save</button>
+                        <button class="btn btn-small btn-cancel" onclick="toggleSecretInput('${providerId}')">Cancel</button>
+                        <a href="${info.docs_url}" target="_blank" class="btn btn-small btn-docs" title="Get API Key">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                            Get Key
+                        </a>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = providersHtml;
+}
+
+function toggleSecretInput(providerId) {
+    const inputRow = document.getElementById(`secret-input-${providerId}`);
+    const isVisible = inputRow.style.display !== 'none';
+
+    // Hide all other input rows first
+    document.querySelectorAll('.secret-input-row').forEach(row => {
+        row.style.display = 'none';
+    });
+
+    // Toggle this one
+    if (!isVisible) {
+        inputRow.style.display = 'block';
+        // Clear the input if not configured
+        const input = document.getElementById(`input-${providerId}`);
+        if (!providersData[providerId].configured) {
+            input.value = '';
+        }
+        input.focus();
+    }
+}
+
+function toggleSecretVisibility(providerId) {
+    const input = document.getElementById(`input-${providerId}`);
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+async function saveSecret(providerId) {
+    const input = document.getElementById(`input-${providerId}`);
+    const apiKey = input.value.trim();
+
+    if (!apiKey) {
+        showSecretsValidation('Please enter an API key', 'error');
+        return;
+    }
+
+    // Don't save if it's just the masked key
+    if (apiKey.includes('*')) {
+        showSecretsValidation('Please enter a new API key (not the masked one)', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/secrets/${providerId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: apiKey })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showSecretsValidation(`${providersData[providerId].name} key saved successfully`, 'success');
+            // Reload the secrets list
+            await loadSecrets();
+        } else {
+            showSecretsValidation(data.message || 'Failed to save API key', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving secret:', error);
+        showSecretsValidation('Failed to save API key', 'error');
+    }
+}
+
+async function deleteSecret(providerId) {
+    if (!confirm(`Are you sure you want to delete the ${providersData[providerId].name} API key?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/secrets/${providerId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showSecretsValidation(`${providersData[providerId].name} key removed`, 'success');
+            // Reload the secrets list
+            await loadSecrets();
+        } else {
+            showSecretsValidation(data.message || 'Failed to remove API key', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting secret:', error);
+        showSecretsValidation('Failed to remove API key', 'error');
+    }
+}
+
+function showSecretsValidation(message, type) {
+    const el = document.getElementById('secrets-validation');
+    el.textContent = message;
+    el.className = `validation-message ${type}`;
+
+    if (type === 'success') {
+        setTimeout(() => {
+            el.className = 'validation-message';
+        }, 3000);
     }
 }
 
