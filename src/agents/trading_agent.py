@@ -1222,44 +1222,50 @@ Trading Recommendations (BUY signals only):
 
                     target_allocation = amount
 
-                    print(f"🎯 Target allocation: ${target_allocation:.2f} USD")
-                    print(f"📊 Current position: ${current_position:.2f} USD")
-                    add_console_log(f"📊 {token} - Current: ${current_position:.2f}, Target: ${target_allocation:.2f}", "info")
-                    
-                    effective_value = float(target_allocation) * LEVERAGE
-                    print(f"⚡ Trade exposure (with {LEVERAGE}x): ${effective_value:.2f}")
-                    add_console_log(f"⚡ {token} exposure with {LEVERAGE}x leverage: ${effective_value:.2f}", "info")
+                    print(f"🎯 Target margin allocation: ${target_allocation:.2f} USD")
+                    print(f"📊 Current notional position: ${current_position:.2f} USD")
 
-                    if current_position < target_allocation:
+                    # Calculate effective trade size with leverage
+                    # For HyperLiquid: if target is $4 with 20x leverage, we buy $80 notional (only needs $4 margin)
+                    # For Solana: no leverage, so effective_value = target_allocation
+                    if EXCHANGE in ["HYPERLIQUID", "ASTER"]:
+                        effective_value = float(target_allocation) * LEVERAGE
+                        print(f"⚡ Target notional (with {LEVERAGE}x): ${effective_value:.2f} (margin: ${target_allocation:.2f})")
+                        add_console_log(f"⚡ {token} target: ${effective_value:.2f} notional | ${target_allocation:.2f} margin", "info")
+                    else:
+                        effective_value = float(target_allocation)  # Solana has no leverage
+                        print(f"💰 Trade size: ${effective_value:.2f}")
+
+                    # Compare current notional position against target notional position
+                    if current_position < (effective_value * 0.97):  # 97% threshold to avoid small adjustments
                         print(f"✨ Executing entry for {token}")
                         add_console_log(f"✨ Opening {token} position", "info")
 
                         if EXCHANGE == "HYPERLIQUID":
-                            cprint(f"🔵 HyperLiquid: ai_entry({token}, ${amount:.2f}, leverage={LEVERAGE})", "cyan")
-                            add_console_log(f"🔵 Executing: ai_entry({token}, ${amount:.2f}, {LEVERAGE}x)", "info")
-                            n.ai_entry(token, amount, leverage=LEVERAGE, account=self.account)
+                            cprint(f"🔵 HyperLiquid: ai_entry({token}, ${effective_value:.2f}, leverage={LEVERAGE})", "cyan")
+                            add_console_log(f"🔵 Executing: ai_entry({token}, ${effective_value:.2f}, {LEVERAGE}x)", "info")
+                            n.ai_entry(token, effective_value, leverage=LEVERAGE, account=self.account)
                         elif EXCHANGE == "ASTER":
-                            cprint(f"🟣 Aster: ai_entry({token}, ${amount:.2f}, leverage={LEVERAGE})", "cyan")
-                            add_console_log(f"🟣 Executing: ai_entry({token}, ${amount:.2f}, {LEVERAGE}x)", "info")
-                            n.ai_entry(token, amount, leverage=LEVERAGE)
+                            cprint(f"🟣 Aster: ai_entry({token}, ${effective_value:.2f}, leverage={LEVERAGE})", "cyan")
+                            add_console_log(f"🟣 Executing: ai_entry({token}, ${effective_value:.2f}, {LEVERAGE}x)", "info")
+                            n.ai_entry(token, effective_value, leverage=LEVERAGE)
                         else:
-                            cprint(f"🟢 Solana: ai_entry({token}, ${amount:.2f})", "cyan")
-                            add_console_log(f"🟢 Executing: ai_entry({token}, ${amount:.2f})", "info")
-                            n.ai_entry(token, amount)
+                            cprint(f"🟢 Solana: ai_entry({token}, ${effective_value:.2f})", "cyan")
+                            add_console_log(f"🟢 Executing: ai_entry({token}, ${effective_value:.2f})", "info")
+                            n.ai_entry(token, effective_value)
 
                         print(f"✅ Entry complete for {token}")
                         add_console_log(f"✅ {token} position opened successfully", "success")
 
                         # Log position open (using shared logging utility)
                         try:
-                            # Determine position value (with leverage)
-                            notional_value = float(amount) * LEVERAGE
-                            log_position_open(token, "LONG", notional_value)
+                            # Log the actual notional value opened
+                            log_position_open(token, "LONG", effective_value)
                         except Exception:
                             pass
-                    elif current_position > target_allocation:
+                    elif current_position > (effective_value * 1.03):  # 103% threshold to avoid small adjustments
                         # Need to REDUCE position
-                        reduction_amount = current_position - target_allocation
+                        reduction_amount = current_position - effective_value
 
                         if target_allocation == 0:
                             # Full close
