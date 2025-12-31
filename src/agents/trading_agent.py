@@ -718,7 +718,7 @@ FULL DATASET:
         # Use instance variables instead of global constants
         tf_mins = timeframe_minutes.get(self.timeframe, 30)
         # Minimum age: at least 60 minutes (1 hour) for proper position evolution
-        min_age_hours = max(MIN_AGE_HOURS, tf_mins * self.days_back / 60)
+        min_age_hours = max(0.0, tf_mins * self.days_back / 60)
 
         cprint(f"\n🔍 VALIDATING CLOSE DECISION FOR {symbol}:", "yellow", attrs=["bold"])
 
