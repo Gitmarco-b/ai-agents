@@ -1,4 +1,5 @@
 // Trading Dashboard Frontend - Updated for Agent
+// include BYOK and Account, User Settings Modals
 
 let updateInterval;
 let portfolioChart = null;
