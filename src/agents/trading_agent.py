@@ -1192,6 +1192,60 @@ Return ONLY valid JSON with the following structure:
 
         cprint("=" * 60 + "\n", "red")
 
+    # ==================================================
+    # Strategy Context Helpers
+    # ==================================================
+
+    def _get_cached_strategy_context(self, token):
+        try:
+            now = datetime.utcnow()
+
+            cache = self._strategy_context_cache.get(token)
+            if cache and cache["expires_at"] > now:
+                return cache["data"]
+
+            if not self.strategy_agent:
+                return None
+
+            strategy_context = self.strategy_agent.get_enriched_context(token)
+
+            self._strategy_context_cache[token] = {
+                "data": strategy_context,
+                "expires_at": now + timedelta(seconds=self.STRATEGY_CONTEXT_TTL),
+            }
+
+            return strategy_context
+
+        except Exception as e:
+            cprint(f"⚠️ Strategy context error: {e}", "yellow")
+            return None
+
+
+    def _format_strategy_context_text(self, strategy_context):
+        if not strategy_context:
+            return "No strategy intelligence available.", {}
+
+        lines = []
+
+        lines.append("STRATEGY INTELLIGENCE (JSON)")
+        lines.append(json.dumps(strategy_context, indent=2))
+
+        aggregate = strategy_context.get("aggregate", {})
+
+        lines.append("\nSTRATEGY SUMMARY")
+        lines.append(f"- Direction bias: {aggregate.get('direction_bias')}")
+        lines.append(f"- Confidence: {aggregate.get('confidence')}")
+        lines.append(
+            f"- Suggested allocation (%): "
+            f"{aggregate.get('suggested_allocation_pct')}"
+        )
+        lines.append(f"- Conflict level: {aggregate.get('conflict_level')}")
+        lines.append(f"- Timestamp: {strategy_context.get('timestamp')}")
+
+        return "\n".join(lines), strategy_context
+   
+
+   
     def analyze_market_data(self, token, market_data):
         """Analyze market data using AI model (single or swarm mode)"""
         try:
@@ -1274,17 +1328,55 @@ Return ONLY valid JSON with the following structure:
 
             # SINGLE MODEL MODE
             else:
-                if "strategy_signals" in market_data:
-                    strategy_context = (
-                        f"Strategy Signals Available:\n"
-                        f"{json.dumps(market_data['strategy_signals'], indent=2)}"
-                    )
-                else:
-                    strategy_context = "No strategy signals available."
+                # -----------------------------
+                # Enriched strategy context
+                # -----------------------------
+                try:
+                    # robust token name detection
+                    if isinstance(market_data, dict):
+                        token_name = market_data.get("symbol") or market_data.get("token") or token
+                    else:
+                        token_name = token
+
+                    strat_obj = None
+                    strategy_context_text = "No strategy intelligence available."
+                    strategy_context_json = {}
+
+                    # Attempt to get enriched context from StrategyAgent (cached)
+                    try:
+                        strat_obj = self._get_cached_strategy_context(token_name)
+                    except Exception as e:
+                        cprint(f"⚠️ Error fetching strategy context for {token_name}: {e}", "yellow")
+                        strat_obj = None
+
+                    if strat_obj:
+                        strategy_context_text, strategy_context_json = self._format_strategy_context_text(strat_obj)
+                    else:
+                        # fallback to legacy market_data['strategy_signals'] if present
+                        if isinstance(market_data, dict) and "strategy_signals" in market_data:
+                            try:
+                                strategy_context_text = (
+                                    "Strategy Signals Available:\n" +
+                                    json.dumps(market_data["strategy_signals"], indent=2)
+                                )
+                                strategy_context_json = {"legacy_signals": market_data["strategy_signals"]}
+                            except Exception:
+                                strategy_context_text = "Strategy Signals Available (unserializable)."
+                                strategy_context_json = {"legacy_signals": str(market_data.get("strategy_signals"))}
+                        else:
+                            strategy_context_text = "No strategy intelligence available."
+                            strategy_context_json = {}
+
+                    # store last context for debug / dashboard
+                    self.last_strategy_context = strategy_context_json
+
+                except Exception as e:
+                    cprint(f"⚠️ Failed to prepare strategy context: {e}", "yellow")
+                    strategy_context_text = "No strategy intelligence available."
 
                 response = self.chat_with_ai(
                     TRADING_PROMPT.format(
-                        strategy_context=strategy_context,
+                        strategy_context=strategy_context_text,
                         position_context=position_context,
                     ),
                     f"Market Data to Analyze:\n{market_data}",
@@ -1352,6 +1444,7 @@ Return ONLY valid JSON with the following structure:
                 ignore_index=True,
             )
             return None
+
 
     def allocate_portfolio(self):
         """
