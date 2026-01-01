@@ -21,6 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load agent state first
     loadAgentState();
 
+    // Load tier info to apply feature locks
+    loadTierInfo();
+
     // Initial updates
     updateDashboard();
     updateConsole();
@@ -917,11 +920,29 @@ async function saveSettings() {
             addConsoleMessage('Settings saved successfully', 'success');
             setTimeout(() => closeSettings(), 1500);
         } else {
-            showValidationMessage(data.message || 'Failed to save settings', 'error');
+            // Check if this is a tier limit error
+            if (data.tier_error && data.errors && data.errors.length > 0) {
+                showTierUpgradePrompt(data.errors);
+            } else {
+                showValidationMessage(data.message || 'Failed to save settings', 'error');
+            }
         }
     } catch (error) {
         console.error('Error saving settings:', error);
         showValidationMessage('Failed to save settings', 'error');
+    }
+}
+
+// Show tier upgrade prompt when settings exceed limits
+function showTierUpgradePrompt(errors) {
+    const errorList = errors.map(e => `• ${e}`).join('\n');
+    const message = `Your current plan doesn't support these settings:\n\n${errorList}\n\nUpgrade your plan to unlock these features?`;
+
+    if (confirm(message)) {
+        // Close settings modal and open account modal to plan tab
+        closeSettings();
+        openAccountModal();
+        setTimeout(() => switchAccountTab('plan'), 100);
     }
 }
 
@@ -1141,6 +1162,11 @@ function switchAccountTab(tabName) {
     // Load secrets when switching to secrets tab
     if (tabName === 'secrets') {
         loadSecrets();
+    }
+
+    // Load tier info when switching to plan tab
+    if (tabName === 'plan') {
+        loadTierInfo();
     }
 }
 
@@ -1363,6 +1389,234 @@ function showSecretsValidation(message, type) {
         setTimeout(() => {
             el.className = 'validation-message';
         }, 3000);
+    }
+}
+
+// ============================================================================
+// TIER / PLAN MANAGEMENT
+// ============================================================================
+
+let currentTierData = null;
+
+async function loadTierInfo() {
+    try {
+        const response = await fetch('/api/tier');
+        const data = await response.json();
+
+        if (data.success) {
+            currentTierData = data;
+            renderTierUI(data);
+        } else {
+            console.error('Failed to load tier info:', data.error);
+        }
+    } catch (error) {
+        console.error('Error loading tier info:', error);
+    }
+}
+
+function renderTierUI(data) {
+    const currentTier = data.tier;
+    const isAdmin = data.is_admin;
+    const features = data.features;
+
+    // Update current plan display
+    const currentPlanName = document.getElementById('current-plan-name');
+    if (currentPlanName) {
+        const tierNames = {
+            'based': 'Based (Free)',
+            'trader': 'Trader',
+            'pro': 'Pro'
+        };
+        currentPlanName.textContent = tierNames[currentTier] || currentTier;
+        currentPlanName.className = `current-plan-name tier-${currentTier}`;
+    }
+
+    // Update plan cards
+    document.querySelectorAll('.plan-card').forEach(card => {
+        const tier = card.dataset.tier;
+        card.classList.toggle('current', tier === currentTier);
+
+        // Update select button
+        const btn = card.querySelector('.btn-select-plan');
+        if (btn) {
+            if (tier === currentTier) {
+                btn.textContent = 'Current Plan';
+                btn.classList.add('active');
+                btn.disabled = true;
+            } else if (isAdmin) {
+                btn.textContent = 'Select Plan';
+                btn.classList.remove('active');
+                btn.disabled = false;
+            } else {
+                // Non-admin users see upgrade/downgrade buttons
+                const tierOrder = ['based', 'trader', 'pro'];
+                const currentIdx = tierOrder.indexOf(currentTier);
+                const targetIdx = tierOrder.indexOf(tier);
+
+                if (targetIdx > currentIdx) {
+                    btn.textContent = 'Upgrade';
+                    btn.classList.remove('active');
+                    btn.disabled = false;
+                } else {
+                    btn.textContent = 'Downgrade';
+                    btn.classList.remove('active');
+                    btn.disabled = false;
+                }
+            }
+        }
+    });
+
+    // Show/hide admin notice
+    const adminNotice = document.getElementById('admin-tier-notice');
+    if (adminNotice) {
+        adminNotice.style.display = isAdmin ? 'flex' : 'none';
+    }
+
+    // Apply tier limits to main dashboard UI
+    applyTierLimits(features, currentTier);
+}
+
+async function selectTier(tier) {
+    if (!currentTierData || !currentTierData.is_admin) {
+        // Non-admin users would go to payment flow
+        showTierUpgradeModal(tier);
+        return;
+    }
+
+    // Admin users can directly switch tiers for testing
+    try {
+        const response = await fetch('/api/tier', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tier: tier })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            console.log(`✅ Tier changed to ${tier}`);
+            loadTierInfo(); // Refresh UI
+        } else {
+            console.error('Failed to change tier:', data.error);
+            alert('Failed to change tier: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error changing tier:', error);
+        alert('Error changing tier');
+    }
+}
+
+function showTierUpgradeModal(tier) {
+    // For non-admin users, show upgrade prompt
+    const tierPrices = {
+        'trader': '$5/month',
+        'pro': '$20/month'
+    };
+
+    const message = tier === 'based'
+        ? 'Are you sure you want to downgrade to the free tier?'
+        : `Upgrade to ${tier.charAt(0).toUpperCase() + tier.slice(1)} for ${tierPrices[tier]}?\n\n(Payment integration coming soon)`;
+
+    alert(message);
+}
+
+function applyTierLimits(features, tier) {
+    // Apply visual locks to UI elements based on tier
+
+    // Swarm mode toggle
+    const swarmToggle = document.getElementById('swarm-mode-toggle');
+    const swarmContainer = swarmToggle?.closest('.setting-item');
+    if (swarmContainer) {
+        if (!features.swarm_mode) {
+            swarmContainer.classList.add('feature-locked');
+            if (swarmToggle) swarmToggle.disabled = true;
+        } else {
+            swarmContainer.classList.remove('feature-locked');
+            if (swarmToggle) swarmToggle.disabled = false;
+        }
+    }
+
+    // BYOK section - only lock for 'based' tier
+    const secretsSection = document.getElementById('secrets-list');
+    if (secretsSection && !features.byok) {
+        const byokNotice = document.createElement('div');
+        byokNotice.className = 'tier-validation warning';
+        byokNotice.innerHTML = '🔒 BYOK (Bring Your Own Key) requires Trader tier or higher';
+        byokNotice.id = 'byok-tier-notice';
+
+        // Only add if not already there
+        if (!document.getElementById('byok-tier-notice')) {
+            secretsSection.parentNode.insertBefore(byokNotice, secretsSection);
+        }
+    } else {
+        const existingNotice = document.getElementById('byok-tier-notice');
+        if (existingNotice) existingNotice.remove();
+    }
+
+    // Token limit indicator
+    updateTokenLimitIndicator(features.max_tokens);
+
+    // Provider restrictions for based tier
+    updateProviderRestrictions(features.providers, tier);
+}
+
+function updateTokenLimitIndicator(maxTokens) {
+    const tokensInput = document.getElementById('monitored-tokens');
+    if (!tokensInput) return;
+
+    // Remove existing badge
+    const existingBadge = document.querySelector('.token-limit-badge');
+    if (existingBadge) existingBadge.remove();
+
+    // Add limit badge if not unlimited
+    if (maxTokens < 999) {
+        const badge = document.createElement('span');
+        badge.className = 'token-limit-badge';
+        badge.innerHTML = `Max: ${maxTokens} tokens`;
+
+        const label = tokensInput.previousElementSibling;
+        if (label) label.appendChild(badge);
+    }
+}
+
+function updateProviderRestrictions(allowedProviders, tier) {
+    const providerSelect = document.getElementById('ai-provider');
+    if (!providerSelect) return;
+
+    // For 'based' tier, disable non-free providers
+    if (tier === 'based' && Array.isArray(allowedProviders)) {
+        Array.from(providerSelect.options).forEach(option => {
+            const provider = option.value;
+            if (!allowedProviders.includes(provider)) {
+                option.disabled = true;
+                option.textContent = option.textContent.replace(' (BYOK Required)', '') + ' (BYOK Required)';
+            } else {
+                option.disabled = false;
+                option.textContent = option.textContent.replace(' (BYOK Required)', '');
+            }
+        });
+    } else {
+        // Enable all providers for paid tiers
+        Array.from(providerSelect.options).forEach(option => {
+            option.disabled = false;
+            option.textContent = option.textContent.replace(' (BYOK Required)', '');
+        });
+    }
+}
+
+// Validate settings against tier before saving
+async function validateSettingsForTier(settings) {
+    try {
+        const response = await fetch('/api/tier/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings)
+        });
+
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error validating settings:', error);
+        return { valid: true, errors: [] }; // Allow on error
     }
 }
 

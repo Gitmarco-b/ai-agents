@@ -48,6 +48,20 @@ from src.utils.secrets_manager import (
     validate_api_key_format,
     load_secrets_to_env
 )
+from src.utils.tier_manager import (
+    get_user_tier,
+    set_user_tier,
+    get_tier_info,
+    get_all_tiers,
+    get_tier_features,
+    can_use_swarm_mode,
+    can_use_byok,
+    get_max_tokens,
+    get_allowed_providers,
+    validate_settings_for_tier,
+    get_tier_comparison,
+    is_admin_user
+)
 
 # Load environment variables
 load_dotenv()
@@ -1030,6 +1044,17 @@ def settings():
                     'errors': errors
                 }), 400
 
+            # Validate against tier limits
+            username = session.get('username', 'User')
+            tier_valid, tier_errors = validate_settings_for_tier(username, data)
+            if not tier_valid:
+                return jsonify({
+                    'success': False,
+                    'message': 'Settings exceed tier limits',
+                    'errors': tier_errors,
+                    'tier_error': True  # Flag for frontend to show upgrade prompt
+                }), 400
+
             # Save settings
             if save_settings(data):
                 # Build detailed log message
@@ -1091,7 +1116,7 @@ def get_ai_models():
         else:
             # Get all providers and their models
             all_providers = ['anthropic', 'openai', 'gemini', 'deepseek', 'xai',
-                           'mistral', 'cohere', 'perplexity', 'groq', 'ollama', 'openrouter']
+                           'mistral', 'cohere', 'perplexity', 'groq', 'ollama', 'ollamafreeapi', 'openrouter']
 
             all_models = {}
             for p in all_providers:
@@ -1235,6 +1260,150 @@ def remove_secret(provider):
 
     except Exception as e:
         print(f"❌ Error removing secret: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+# ============================================================================
+# TIER MANAGEMENT API
+# ============================================================================
+
+@app.route('/api/tier', methods=['GET'])
+@login_required
+def get_tier():
+    """
+    Get current user's tier information and limits
+    Returns tier details, features, and comparison with other tiers
+    """
+    try:
+        username = session.get('username', 'anonymous')
+        current_tier = get_user_tier(username)
+        tier_info = get_tier_info(current_tier)
+        features = get_tier_features(current_tier)
+        is_admin = is_admin_user(username)
+
+        return jsonify({
+            'success': True,
+            'tier': current_tier,
+            'tier_info': tier_info,
+            'features': features,
+            'is_admin': is_admin,
+            'all_tiers': get_tier_comparison()
+        })
+
+    except Exception as e:
+        print(f"❌ Error getting tier: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/api/tier', methods=['POST'])
+@login_required
+def update_tier():
+    """
+    Update user's tier (for testing/admin purposes)
+    In production, this would be handled by payment system
+    """
+    try:
+        username = session.get('username', 'anonymous')
+        data = request.get_json()
+        new_tier = data.get('tier')
+
+        if not new_tier:
+            return jsonify({
+                'success': False,
+                'message': 'Tier is required'
+            }), 400
+
+        # Only allow tier changes for admin users (for testing)
+        if not is_admin_user(username):
+            return jsonify({
+                'success': False,
+                'message': 'Tier changes require subscription. Contact support for upgrades.'
+            }), 403
+
+        success, error = set_user_tier(username, new_tier)
+        if success:
+            add_console_log(f"Tier changed to: {new_tier}", "info")
+            return jsonify({
+                'success': True,
+                'tier': new_tier,
+                'tier_info': get_tier_info(new_tier),
+                'features': get_tier_features(new_tier)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': error
+            }), 400
+
+    except Exception as e:
+        print(f"❌ Error updating tier: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/api/tier/validate', methods=['POST'])
+@login_required
+def validate_tier_settings():
+    """
+    Validate settings against user's tier limits
+    Returns validation errors if settings exceed tier limits
+    """
+    try:
+        username = session.get('username', 'anonymous')
+        settings = request.get_json()
+
+        is_valid, errors = validate_settings_for_tier(username, settings)
+
+        return jsonify({
+            'success': True,
+            'is_valid': is_valid,
+            'errors': errors,
+            'tier': get_user_tier(username)
+        })
+
+    except Exception as e:
+        print(f"❌ Error validating tier: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/api/tier/features', methods=['GET'])
+@login_required
+def get_tier_feature_access():
+    """
+    Get feature access for current user based on their tier
+    Used by frontend to show/hide/lock features
+    """
+    try:
+        username = session.get('username', 'anonymous')
+        tier = get_user_tier(username)
+        features = get_tier_features(tier)
+
+        return jsonify({
+            'success': True,
+            'tier': tier,
+            'can_use_swarm': features.get('swarm_mode', False),
+            'can_use_byok': features.get('byok', False),
+            'max_tokens': features.get('max_tokens', 5),
+            'min_cycle_minutes': features.get('min_cycle_minutes', 5),
+            'allowed_timeframes': features.get('allowed_timeframes', []),
+            'allowed_providers': get_allowed_providers(username),
+            'max_swarm_models': features.get('max_swarm_models', 0),
+            'is_admin': is_admin_user(username)
+        })
+
+    except Exception as e:
+        print(f"❌ Error getting tier features: {e}")
         return jsonify({
             'success': False,
             'message': f'Error: {str(e)}'

@@ -1785,3 +1785,269 @@ textarea.setting-input {
         justify-content: center;
     }
 }
+
+/* ============================================================================
+   PLAN / TIER SELECTION UI
+   ============================================================================ */
+
+.current-plan-box {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.current-plan-label {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+.current-plan-name {
+    color: var(--text-primary);
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.current-plan-name.tier-based {
+    color: var(--text-muted);
+}
+
+.current-plan-name.tier-trader {
+    color: var(--accent-blue);
+}
+
+.current-plan-name.tier-pro {
+    color: var(--accent-gold, #f0b90b);
+}
+
+.plan-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.plan-card {
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.2s ease;
+    position: relative;
+    cursor: pointer;
+}
+
+.plan-card:hover {
+    border-color: var(--accent-blue);
+    transform: translateY(-2px);
+}
+
+.plan-card.current {
+    border-color: var(--accent-green);
+    background: rgba(16, 185, 129, 0.05);
+}
+
+.plan-card.current::after {
+    content: "Current";
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: var(--accent-green);
+    color: var(--bg-primary);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.plan-card.recommended {
+    border-color: var(--accent-blue);
+}
+
+.plan-card.recommended::before {
+    content: "Recommended";
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent-blue);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.plan-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.plan-price {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent-blue);
+    margin-bottom: 4px;
+}
+
+.plan-price.free {
+    color: var(--accent-green);
+}
+
+.plan-period {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+}
+
+.plan-features {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.plan-features li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.plan-features li::before {
+    content: "✓";
+    color: var(--accent-green);
+    font-weight: bold;
+}
+
+.plan-features li.locked {
+    color: var(--text-muted);
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+.plan-features li.locked::before {
+    content: "✗";
+    color: var(--accent-red);
+}
+
+.btn-select-plan {
+    width: 100%;
+    margin-top: 16px;
+    padding: 10px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-select-plan:hover {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+
+.btn-select-plan.active {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
+    cursor: default;
+}
+
+.admin-notice {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--accent-gold, #f59e0b);
+    font-size: 13px;
+}
+
+.admin-notice svg {
+    flex-shrink: 0;
+}
+
+/* Locked feature indicators */
+.feature-locked {
+    position: relative;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.feature-locked::after {
+    content: "PRO";
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    background: var(--accent-gold, #f0b90b);
+    color: var(--bg-primary);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.feature-locked.trader-required::after {
+    content: "TRADER";
+    background: var(--accent-blue);
+}
+
+/* Token limit badge */
+.token-limit-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: var(--accent-gold, #f59e0b);
+    margin-left: 8px;
+}
+
+/* Tier validation message */
+.tier-validation {
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-top: 16px;
+    font-size: 13px;
+}
+
+.tier-validation.warning {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: var(--accent-gold, #f59e0b);
+}
+
+.tier-validation.error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--accent-red);
+}
+
+/* Mobile adjustments for plan cards */
+@media (max-width: 900px) {
+    .plan-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .plan-card.recommended::before {
+        top: -8px;
+    }
+}

@@ -410,6 +410,10 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                     PROFILE
                 </button>
+                <button class="settings-tab" data-tab="plan" onclick="switchAccountTab('plan')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+                    PLAN
+                </button>
                 <button class="settings-tab" data-tab="secrets" onclick="switchAccountTab('secrets')">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                     SECRETS
@@ -459,6 +463,78 @@
                                 Logout
                             </button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- PLAN Tab Content -->
+                <div id="account-tab-plan" class="settings-tab-content">
+                    <div class="setting-section">
+                        <h3 class="section-title">Current Plan</h3>
+                        <div class="current-plan-box" id="current-plan-display">
+                            <div>
+                                <div class="current-plan-label">Your current plan</div>
+                                <div class="current-plan-name" id="current-plan-name">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Plan Comparison -->
+                    <div class="setting-section">
+                        <h3 class="section-title">Available Plans</h3>
+                        <div class="plan-cards" id="plan-comparison">
+                            <!-- Based Plan -->
+                            <div class="plan-card" data-tier="based">
+                                <div class="plan-name">Based</div>
+                                <div class="plan-price free">Free</div>
+                                <div class="plan-period">Forever free</div>
+                                <ul class="plan-features">
+                                    <li>Up to 5 tokens</li>
+                                    <li>5+ minute cycles</li>
+                                    <li>Single AI mode only</li>
+                                    <li>Free AI models (Ollama)</li>
+                                </ul>
+                                <button class="btn-select-plan" onclick="selectTier('based')">Select</button>
+                            </div>
+
+                            <!-- Trader Plan -->
+                            <div class="plan-card recommended" data-tier="trader">
+                                <div class="plan-name">Trader</div>
+                                <div class="plan-price">$5</div>
+                                <div class="plan-period">per month</div>
+                                <ul class="plan-features">
+                                    <li>Up to 10 tokens</li>
+                                    <li>5+ minute cycles</li>
+                                    <li>Single AI mode</li>
+                                    <li>Bring Your Own Key (BYOK)</li>
+                                    <li>All AI providers</li>
+                                </ul>
+                                <button class="btn-select-plan" onclick="selectTier('trader')">Select</button>
+                            </div>
+
+                            <!-- Pro Plan -->
+                            <div class="plan-card" data-tier="pro">
+                                <div class="plan-name">Pro</div>
+                                <div class="plan-price">$20</div>
+                                <div class="plan-period">per month</div>
+                                <ul class="plan-features">
+                                    <li>Unlimited tokens</li>
+                                    <li>Any cycle time</li>
+                                    <li>Swarm Mode (multi-AI)</li>
+                                    <li>Up to 6 AI models</li>
+                                    <li>All AI providers</li>
+                                    <li>Priority support</li>
+                                </ul>
+                                <button class="btn-select-plan" onclick="selectTier('pro')">Select</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Admin Notice (only shown for admin users) -->
+                    <div class="admin-notice" id="admin-tier-notice" style="display: none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                        <span>Admin Mode: You can switch between all tiers for testing</span>
                     </div>
                 </div>
 
