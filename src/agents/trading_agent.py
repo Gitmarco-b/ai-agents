@@ -779,7 +779,12 @@ FULL DATASET:
             return "NOTHING", 0, f"Error calculating consensus: {str(e)}"
 
     def fetch_all_open_positions(self):
-        """Fetch all open positions across all symbols with age tracking"""
+        """
+        Fetch ALL open positions across all symbols with age tracking.
+
+        CRITICAL FIX: Now iterates through ALL subpositions, not just the first one.
+        This ensures we detect multiple positions for the same symbol.
+        """
         cprint("\n" + "=" * 60, "cyan")
         cprint("📊 FETCHING ALL OPEN POSITIONS", "white", "on_blue", attrs=["bold"])
         cprint("=" * 60, "cyan")
@@ -787,52 +792,71 @@ FULL DATASET:
         all_positions = {}
         exchange_positions = {}  # For syncing with tracker
         check_tokens = SYMBOLS if EXCHANGE in ["ASTER", "HYPERLIQUID"] else MONITORED_TOKENS
+        total_position_count = 0
 
         for symbol in check_tokens:
             try:
-                positions, im_in_pos, pos_size, pos_sym, entry_px, pnl_perc, is_long = n.get_position(
+                # get_position returns: positions (list), im_in_pos, pos_size, pos_sym, entry_px, pnl_perc, is_long
+                # The 'positions' list contains ALL subpositions for this symbol
+                positions_list, im_in_pos, _, _, _, _, _ = n.get_position(
                     symbol, self.account
                 )
 
-                if im_in_pos and pos_size != 0:
-                    # Get position age from tracker
-                    age_hours = 0.0
-                    if POSITION_TRACKER_AVAILABLE:
-                        age_hours = get_position_age_hours(symbol)
+                if im_in_pos and positions_list:
+                    # CRITICAL FIX: Iterate through ALL positions, not just the first one
+                    for pos in positions_list:
+                        pos_size = float(pos.get("szi", 0))
+                        entry_px = float(pos.get("entryPx", 0))
+                        pnl_perc = float(pos.get("returnOnEquity", 0)) * 100
+                        is_long = pos_size > 0
 
-                    position_data = {
-                        "symbol": symbol,
-                        "size": pos_size,
-                        "entry_price": entry_px,
-                        "pnl_percent": pnl_perc,
-                        "is_long": is_long,
-                        "side": "LONG 🟢" if is_long else "SHORT 🔴",
-                        "age_hours": age_hours,
-                    }
+                        if pos_size == 0:
+                            continue
 
-                    # Store for tracker sync
-                    exchange_positions[symbol] = {
-                        "entry_price": entry_px,
-                        "size": pos_size,
-                        "is_long": is_long
-                    }
+                        # Get position age from tracker
+                        age_hours = 0.0
+                        if POSITION_TRACKER_AVAILABLE:
+                            age_hours = get_position_age_hours(symbol)
 
-                    if symbol not in all_positions:
-                        all_positions[symbol] = []
-                    all_positions[symbol].append(position_data)
+                        position_data = {
+                            "symbol": symbol,
+                            "size": pos_size,
+                            "entry_price": entry_px,
+                            "pnl_percent": pnl_perc,
+                            "is_long": is_long,
+                            "side": "LONG 🟢" if is_long else "SHORT 🔴",
+                            "age_hours": age_hours,
+                        }
 
-                    # Include age in display
-                    age_str = f"{age_hours:.1f}h" if age_hours > 0 else "NEW"
-                    cprint(
-                        f"   {symbol:<10} | {position_data['side']:<10} | "
-                        f"Size: {pos_size:>10.4f} | Entry: ${entry_px:>10.2f} | "
-                        f"PnL: {pnl_perc:>6.2f}% | Age: {age_str}",
-                        "cyan",
-                    )
+                        # Store for tracker sync (use combined size for all positions of this symbol)
+                        if symbol not in exchange_positions:
+                            exchange_positions[symbol] = {
+                                "entry_price": entry_px,
+                                "size": 0,
+                                "is_long": is_long
+                            }
+                        exchange_positions[symbol]["size"] += pos_size
+
+                        if symbol not in all_positions:
+                            all_positions[symbol] = []
+                        all_positions[symbol].append(position_data)
+                        total_position_count += 1
+
+                        # Include age in display
+                        age_str = f"{age_hours:.1f}h" if age_hours > 0 else "NEW"
+                        cprint(
+                            f"   {symbol:<10} | {position_data['side']:<10} | "
+                            f"Size: {pos_size:>10.4f} | Entry: ${entry_px:>10.2f} | "
+                            f"PnL: {pnl_perc:>6.2f}% | Age: {age_str}",
+                            "cyan",
+                        )
 
             except Exception as e:
                 cprint(f"   ❌ Error fetching {symbol}: {e}", "red")
                 continue
+
+        # Show total count (including subpositions)
+        cprint(f"\n   📊 Total positions detected: {total_position_count}", "yellow", attrs=["bold"])
 
         # Sync tracker with actual exchange positions
         if POSITION_TRACKER_AVAILABLE and exchange_positions:
@@ -1315,9 +1339,24 @@ Return ONLY valid JSON with the following structure:
             return None
 
     def allocate_portfolio(self):
-        """Get AI-recommended portfolio allocation"""
+        """
+        Smart Portfolio Allocation - Equal Distribution
+
+        CRITICAL: This implements SMART POSITION SIZING to prevent all funds
+        from going to the first position. Funds are distributed EQUALLY across
+        all BUY recommendations.
+
+        Strategy:
+        1. Get all BUY recommendations
+        2. Calculate available margin (90% of account balance)
+        3. Divide equally among all BUY tokens
+        4. Ensure minimum order size ($12 notional / leverage)
+        5. NO PARTIAL CLOSES - positions are binary (KEEP 100% or CLOSE 100%)
+        """
         try:
-            cprint("\n💰 Calculating optimal portfolio allocation...", "cyan")
+            cprint("\n" + "=" * 60, "cyan")
+            cprint("💰 SMART PORTFOLIO ALLOCATION", "white", "on_blue", attrs=["bold"])
+            cprint("=" * 60, "cyan")
 
             # Filter only BUY recommendations
             buy_recommendations = self.recommendations_df[
@@ -1326,6 +1365,7 @@ Return ONLY valid JSON with the following structure:
 
             if buy_recommendations.empty:
                 cprint("✅ No BUY recommendations. Skipping allocation.", "green")
+                add_console_log("No BUY signals - skipping allocation", "info")
                 return {}
 
             # Filter to only valid tokens for this exchange
@@ -1334,14 +1374,14 @@ Return ONLY valid JSON with the following structure:
                 buy_recommendations = buy_recommendations[
                     buy_recommendations["token"].isin(valid_tokens)
                 ]
-                cprint(f"📋 Filtered to valid {EXCHANGE} symbols: {list(buy_recommendations['token'])}", "cyan")
+                cprint(f"📋 Valid {EXCHANGE} symbols: {list(buy_recommendations['token'])}", "cyan")
                 add_console_log(f"Valid tokens for allocation: {list(buy_recommendations['token'])}", "info")
             else:
                 valid_tokens = MONITORED_TOKENS
                 buy_recommendations = buy_recommendations[
                     buy_recommendations["token"].isin(valid_tokens)
                 ]
-            
+
             if buy_recommendations.empty:
                 cprint("⚠️ No BUY recommendations for valid exchange tokens", "yellow")
                 add_console_log("No valid tokens to allocate after filtering", "warning")
@@ -1353,143 +1393,86 @@ Return ONLY valid JSON with the following structure:
                 cprint("❌ Account balance is zero. Cannot allocate.", "red")
                 return None
 
-            # Calculate position sizing
-            max_position_size = account_balance * (MAX_POSITION_PERCENTAGE / 100)
+            # ================================================================
+            # 🎯 SMART POSITION SIZING - EQUAL DISTRIBUTION
+            # ================================================================
+            num_positions = len(buy_recommendations)
+            buy_tokens = list(buy_recommendations["token"])
 
-            cprint(
-                f"🎯 Maximum position size: ${max_position_size:.2f} "
-                f"({MAX_POSITION_PERCENTAGE}% of ${account_balance:.2f})",
-                "cyan",
-            )
+            cprint(f"\n🎯 SMART SIZING: {num_positions} position(s) to allocate", "yellow", attrs=["bold"])
+            cprint(f"   💵 Account Balance: ${account_balance:.2f}", "white")
+            cprint(f"   📈 Max Position %: {MAX_POSITION_PERCENTAGE}%", "white")
 
-            # Token set depends on exchange type
-            if EXCHANGE in ["ASTER", "HYPERLIQUID"]:
-                available_tokens = SYMBOLS
-            else:
-                available_tokens = MONITORED_TOKENS
+            # Calculate total margin available (90% of account)
+            total_available_margin = account_balance * (MAX_POSITION_PERCENTAGE / 100)
 
-            # AI prompt for allocation (different format for exchanges vs Solana)
-            if EXCHANGE in ["ASTER", "HYPERLIQUID"]:
-                # For centralized exchanges: use SYMBOLS (BTC, ETH, SOL)
-                allocation_prompt = f"""You are our Portfolio Allocation AI 🌙
+            # Calculate cash buffer (10% of account)
+            cash_buffer = account_balance * (CASH_PERCENTAGE / 100)
 
-Given:
-- Total portfolio size: ${account_balance}
-- Maximum position size: ${max_position_size} ({MAX_POSITION_PERCENTAGE}% of total)
-- Minimum cash buffer: {CASH_PERCENTAGE}%
-- Available symbols: {available_tokens}
-- Exchange: {EXCHANGE}
+            # Calculate per-position margin (EQUAL distribution)
+            margin_per_position = total_available_margin / num_positions
 
-Provide a portfolio allocation that:
-1. Never exceeds max position size per token
-2. Maintains minimum cash buffer
-3. Returns allocation as a JSON object with SYMBOL NAMES as keys and USD amounts as values
-4. Use EXACT symbol names from the available symbols list (e.g., "BTC", "ETH", "SOL")
-5. For cash allocation, use "{USDC_ADDRESS}" as the key
+            # Minimum margin required per position (to meet $12 notional minimum)
+            min_margin_per_position = 12 / LEVERAGE  # e.g., $12 / 20x = $0.60
 
-Example format:
-{{
-    "BTC": 25.50,
-    "ETH": 30.00,
-    "SOL": 15.25,
-    "{USDC_ADDRESS}": 5.00
-}}
+            cprint(f"\n📊 EQUAL DISTRIBUTION CALCULATION:", "cyan", attrs=["bold"])
+            cprint(f"   💰 Total Available Margin: ${total_available_margin:.2f}", "green")
+            cprint(f"   🔢 Number of Positions: {num_positions}", "white")
+            cprint(f"   📏 Margin Per Position: ${margin_per_position:.2f}", "green", attrs=["bold"])
+            cprint(f"   ⚡ Leverage: {LEVERAGE}x", "white")
+            cprint(f"   💎 Notional Per Position: ${margin_per_position * LEVERAGE:.2f}", "cyan", attrs=["bold"])
+            cprint(f"   🛡️  Cash Buffer (10%): ${cash_buffer:.2f}", "yellow")
 
-CRITICAL: Use SYMBOL NAMES (like "BTC", "ETH", "SOL"), NOT addresses!"""
-            else:
-                # For Solana: use token addresses
-                allocation_prompt = f"""You are our Portfolio Allocation AI 🌙
+            # Check if we can meet minimum order size for all positions
+            if margin_per_position < min_margin_per_position:
+                cprint(f"\n⚠️  WARNING: Margin per position (${margin_per_position:.2f}) below minimum (${min_margin_per_position:.2f})", "yellow")
+                cprint(f"   Reducing number of positions to meet minimum order size...", "yellow")
 
-Given:
-- Total portfolio size: ${account_balance}
-- Maximum position size: ${max_position_size} ({MAX_POSITION_PERCENTAGE}% of total)
-- Minimum cash (USDC) buffer: {CASH_PERCENTAGE}%
-- Available tokens: {available_tokens}
-- USDC Address: {USDC_ADDRESS}
+                # Calculate how many positions we can actually support
+                max_supportable_positions = int(total_available_margin / min_margin_per_position)
 
-Provide a portfolio allocation that:
-1. Never exceeds max position size per token
-2. Maintains minimum cash buffer
-3. Returns allocation as a JSON object with token addresses as keys and USD amounts as values
-4. Uses exact USDC address: {USDC_ADDRESS} for cash allocation
+                if max_supportable_positions < 1:
+                    cprint("❌ Insufficient funds for any position. Need more capital.", "red")
+                    add_console_log("Insufficient funds for positions", "error")
+                    return {}
 
-Example format:
-{{
-    "token_address": amount_in_usd,
-    "{USDC_ADDRESS}": remaining_cash_amount
-}}"""
+                # Sort by confidence and take top N
+                buy_recommendations = buy_recommendations.nlargest(max_supportable_positions, 'confidence')
+                buy_tokens = list(buy_recommendations["token"])
+                num_positions = len(buy_tokens)
+                margin_per_position = total_available_margin / num_positions
 
-            # Compose user context
-            user_content = f"""
-Total Portfolio Size: ${account_balance:,.2f} USD
-Trading Recommendations (BUY signals only):
-{buy_recommendations.to_string()}
-"""
+                cprint(f"   📉 Reduced to {num_positions} highest-confidence position(s)", "yellow")
+                cprint(f"   📏 New Margin Per Position: ${margin_per_position:.2f}", "green")
 
-            # Call AI model
-            response = self.chat_with_ai(allocation_prompt, user_content)
+            # Build equal allocation dictionary
+            allocations = {}
+            for token in buy_tokens:
+                allocations[token] = round(margin_per_position, 2)
 
-            if not response:
-                cprint("❌ No response from AI for portfolio allocation", "red")
-                return None
+            # Add cash buffer
+            allocations[USDC_ADDRESS] = round(cash_buffer, 2)
 
-            # Safely parse JSON
-            allocations = extract_json_from_text(response)
-            if not allocations:
-                cprint("❌ Error parsing allocation JSON: No JSON object found in the response", "red")
-                cprint(f"   Raw response: {response}", "yellow")
-                return None
+            # ================================================================
+            # 📊 DISPLAY FINAL ALLOCATION
+            # ================================================================
+            cprint("\n" + "=" * 60, "green")
+            cprint("📊 FINAL SMART ALLOCATION:", "white", "on_green", attrs=["bold"])
+            cprint("=" * 60, "green")
 
-            # Normalize keys if AI returned string literal 'USDC_ADDRESS'
-            if "USDC_ADDRESS" in allocations and USDC_ADDRESS not in allocations:
-                amount = allocations.pop("USDC_ADDRESS")
-                allocations[USDC_ADDRESS] = amount
-
-            # Validate and normalize allocations
-            valid_allocations = {
-                k: float(v) for k, v in allocations.items()
-                if isinstance(v, (int, float, str)) and str(v).replace('.', '', 1).isdigit()
-            }
-            # CRITICAL FIX: Exclude USDC cash buffer from total_margin calculation
-            total_margin = sum(v for k, v in valid_allocations.items() if k != USDC_ADDRESS)
-            target_margin = account_balance * (MAX_POSITION_PERCENTAGE / 100)
-
-            # Scale allocations to use 90% of equity (excluding USDC cash buffer)
-            if total_margin > 0:
-                scale_factor = target_margin / total_margin
-                for k in valid_allocations.keys():
-                    if k != USDC_ADDRESS:  # Don't scale USDC cash buffer
-                        valid_allocations[k] = round(valid_allocations[k] * scale_factor, 2)
-            
-            # Enforce minimum trade size (≥ $12 notional)
-            min_margin = 12 / LEVERAGE
-            adjusted = False
-            for k, v in valid_allocations.items():
-                if k == USDC_ADDRESS:
-                    continue  # skip cash buffer
-                if v < min_margin:
-                    cprint(f"⚠️ Raising {k} from ${v:.2f} to minimum ${min_margin:.2f}", "yellow")
-                    valid_allocations[k] = round(min_margin, 2)
-                    adjusted = True
-            
-            # Rebalance if any raises occurred
-            if adjusted:
-                total_margin = sum(v for k, v in valid_allocations.items() if k != USDC_ADDRESS)
-                scale_factor = target_margin / total_margin
-                for k in valid_allocations.keys():
-                    if k != USDC_ADDRESS:
-                        valid_allocations[k] = round(valid_allocations[k] * scale_factor, 2)
-            
-            allocations = valid_allocations
-
-            # Pretty print allocation
-            cprint("\n📊 AI Portfolio Allocation:", "green", attrs=["bold"])
+            total_allocated = 0
             for token, amount in allocations.items():
-                token_display = "USDC (Cash)" if token == USDC_ADDRESS else token
-                try:
-                    cprint(f"   • {token_display}: ${float(amount):,.2f}", "green")
-                except (ValueError, TypeError):
-                    cprint(f"   • {token_display}: {amount} (Invalid Amount)", "red")
+                if token == USDC_ADDRESS:
+                    cprint(f"   🛡️  USDC (Cash Buffer): ${amount:.2f}", "yellow")
+                else:
+                    notional = amount * LEVERAGE
+                    cprint(f"   💎 {token}: ${amount:.2f} margin → ${notional:.2f} notional", "green")
+                    total_allocated += amount
+                    add_console_log(f"Allocating {token}: ${amount:.2f} margin (${notional:.2f} notional)", "info")
+
+            cprint(f"\n   📈 Total Margin Allocated: ${total_allocated:.2f}", "cyan", attrs=["bold"])
+            cprint(f"   💰 Total Notional Exposure: ${total_allocated * LEVERAGE:.2f}", "cyan", attrs=["bold"])
+            cprint("=" * 60 + "\n", "green")
 
             return allocations
 

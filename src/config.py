@@ -17,8 +17,8 @@ SOL_ADDRESS = "So11111111111111111111111111111111111111111"
 EXCLUDED_TOKENS = [USDC_ADDRESS, SOL_ADDRESS]
 
 # ⚡ HyperLiquid Configuration
-# We will trade SOL for the test because it has good volatility
-HYPERLIQUID_SYMBOLS = ['SOL'] 
+# Main trading tokens - diversified portfolio
+HYPERLIQUID_SYMBOLS = ['BTC', 'ETH', 'SOL', 'LTC', 'AAVE', 'AVAX', 'HYPE']
 HYPERLIQUID_LEVERAGE = 20  # Current leverage setting (matches trading_agent.py)
 
 # Position sizing 🎯
@@ -89,21 +89,24 @@ DATA_TIMEFRAME = '5m'
 SAVE_OHLCV_DATA = False 
 
 # AI Model Settings 🤖
-# 🤖 AI AGENT SETTINGS (GEMINI POWERED) 💎
-# Available Gemini models (see AI Models Reference Guide):
-# - "gemini-3-pro" - Latest flagship model (1M context)
-# - "gemini-3-flash" - Fast, cost-effective (1M context)
-# - "gemini-2.5-pro" - Powerful, stable (1M context)
-# - "gemini-2.5-flash" - Fast variant (1M context) ⚡ RECOMMENDED for trading
-# - "gemini-2.5-flash-lite" - Ultra-efficient (1M context)
-# - "gemini-2.0-flash" - Multimodal (1M context)
-# - "gemini-1.5-flash" - Legacy fast model (1M context)
-# - "gemini-1.5-pro" - Legacy pro model (1M context)
+# 🤖 AI AGENT SETTINGS - DeepSeek Trading Optimized
+#
+# Available DeepSeek models (via OllamaFreeAPI - FREE!):
+# - "deepseek-v3.2" - Latest flagship (671B) ⚡ BEST
+# - "deepseek-v3.2:671b-q4_K_M" - Quantized version (memory efficient)
+# - "deepseek-v3.1:671b" - Stable trading model ⚡ RECOMMENDED
+# - "deepseek-r1:7b/14b/32b" - Reasoning models
+#
+# Alternative paid options:
+# - Anthropic: "claude-sonnet-4-5-20250929" - Best balance
+# - OpenAI: "gpt-4.1-mini" - Efficient
+# - Gemini: "gemini-2.5-flash" - Fast
 
-AI_MODEL = "gemini-2.5-flash"  # ⚡ RECOMMENDED for trading (Low Latency)
-
-AI_MAX_TOKENS = 2000 
-AI_TEMPERATURE = 0.3
+# 🤖 SINGLE MODEL SETTINGS (DEFAULT: DeepSeek V3.1)
+AI_MODEL_TYPE = 'ollamafreeapi'      # FREE API - no key required
+AI_MODEL = "deepseek-v3.1:671b"       # ⚡ RECOMMENDED for trading
+AI_MAX_TOKENS = 8000                  # Increased for multi-step reasoning
+AI_TEMPERATURE = 0.6                  # Official DeepSeek recommended "sweet spot"
 
 # Trading Strategy Agent Settings
 ENABLE_STRATEGIES = True 

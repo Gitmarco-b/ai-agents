@@ -15,32 +15,82 @@ class OllamaModel(BaseModel):
     
     # Available Ollama models - can be expanded based on what's installed locally
     # Dict format for consistency with other model providers
+    # To install: ollama pull <model_name>
     AVAILABLE_MODELS = {
+        # ===== DeepSeek V3.2 (RECOMMENDED for Trading) =====
+        "deepseek-v3.2:671b-q4_K_M": {
+            "description": "DeepSeek V3.2 671B Quantized - Best trading model (Q4_K_M)",
+            "parameters": "671B",
+            "recommended": True
+        },
+        "deepseek-v3.2": {
+            "description": "DeepSeek V3.2 - Latest flagship (671B parameters)",
+            "parameters": "671B",
+            "recommended": True
+        },
+        # ===== DeepSeek V3.1 (Stable for Trading) =====
+        "deepseek-v3.1:671b": {
+            "description": "DeepSeek V3.1 671B - Stable trading model ⚡ Recommended",
+            "parameters": "671B",
+            "recommended": True
+        },
+        "deepseek-v3.1:671b-q4_K_M": {
+            "description": "DeepSeek V3.1 671B Quantized - Memory efficient",
+            "parameters": "671B"
+        },
+        # ===== DeepSeek Reasoning Models =====
         "deepseek-r1": {
             "description": "DeepSeek R1 - Reasoning model (7B parameters, local)",
             "parameters": "7B"
         },
+        "deepseek-r1:14b": {
+            "description": "DeepSeek R1 14B - Enhanced reasoning (14B parameters)",
+            "parameters": "14B"
+        },
+        "deepseek-r1:32b": {
+            "description": "DeepSeek R1 32B - Strong reasoning (32B parameters)",
+            "parameters": "32B"
+        },
+        # ===== DeepSeek Coder =====
         "deepseek-coder": {
             "description": "DeepSeek Coder - STEM and code expert (6.7B parameters, local)",
             "parameters": "6.7B"
         },
+        "deepseek-coder:33b": {
+            "description": "DeepSeek Coder 33B - Advanced coding (33B parameters)",
+            "parameters": "33B"
+        },
+        # ===== Qwen Models =====
         "qwen3:8b": {
             "description": "Qwen 3 8B - Fast reasoning model (8B parameters, local)",
             "parameters": "8B"
+        },
+        "qwen3:14b": {
+            "description": "Qwen 3 14B - Balanced performance (14B parameters)",
+            "parameters": "14B"
+        },
+        "qwen3:32b": {
+            "description": "Qwen 3 32B - Strong reasoning (32B parameters)",
+            "parameters": "32B"
+        },
+        # ===== LLaMA Models =====
+        "llama3.2": {
+            "description": "Meta Llama 3.2 - Fast and efficient (default, local)",
+            "parameters": "8B"
+        },
+        "llama3.3:70b": {
+            "description": "Meta Llama 3.3 70B - Large model (70B parameters)",
+            "parameters": "70B"
+        },
+        # ===== Other Models =====
+        "mistral": {
+            "description": "Mistral - General purpose model (7B parameters, local)",
+            "parameters": "7B"
         },
         "gemma:2b": {
             "description": "Google Gemma 2B - Lightweight model (2B parameters, local)",
             "parameters": "2B"
         },
-        "llama3.2": {
-            "description": "Meta Llama 3.2 - Fast and efficient (default, local)",
-            "parameters": "70B"
-        },
-        "mistral": {
-            "description": "Mistral - General purpose model (7B parameters, local)",
-            "parameters": "7B"
-        },
-        # Add your own local models through Hugging Face/Ollama here
     }
     
     def __init__(self, api_key=None, model_name="llama3.2"):
