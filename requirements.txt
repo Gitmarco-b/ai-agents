@@ -48,7 +48,7 @@ googleapis-common-protos==1.72.0
 # AI Models
 groq==1.0.0
 openai==2.14.0
-ollama==0.6.1  
+ollamafreeapi  # Free access to 650+ AI models without API keys
 
 # gRPC
 grpcio==1.76.0
@@ -79,12 +79,11 @@ matplotlib-inline==0.2.1
 mdurl==0.1.2
 msgpack==1.1.2
 numba==0.61.2
- 
-# Removed: numpy conflicts with TA-Lib-Precompiled
+# numpy==2.2.6  # Removed: conflicts with TA-Lib-Precompiled
 
 # Data Analysis
 pandas==2.3.3
-pandas-ta 
+pandas-ta==0.4.71b0  
 # Removed: requires Python 3.12+, using TA-Lib-Precompiled instead
 
 # Parsing & Processing
@@ -184,5 +183,4 @@ websockets==15.0
 # ============================================================================
 flask==3.0.0
 werkzeug==3.0.0
-flask-cors==4.0.0
-TA-Lib-Precompiled==0.4.25
+flask_cors
