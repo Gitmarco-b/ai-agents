@@ -201,6 +201,12 @@ EXCHANGE = CONFIG_EXCHANGE.upper() if CONFIG_EXCHANGE else "HYPERLIQUID"
 # 🌊 AI MODE SELECTION (Default - can be overridden by user settings)
 DEFAULT_SWARM_MODE = False  # True = Swarm Mode (all Models), False = Single Model
 
+# 🌊 SWARM CONSENSUS SETTINGS
+# Minimum confidence threshold for swarm consensus to execute a trade
+# If consensus confidence is below this threshold, default to NOTHING
+# Recommended: 55-65% (requires clear majority, not just a tie)
+MIN_SWARM_CONFIDENCE = 55  # 55% = requires at least slight majority (e.g., 3/5 models agree)
+
 # 📈 TRADING MODE SETTINGS
 LONG_ONLY = False 
 
@@ -747,42 +753,112 @@ FULL DATASET:
             return str(market_data)
 
     def _calculate_swarm_consensus(self, swarm_result):
-        """Calculate consensus from individual swarm responses"""
+        """
+        Calculate consensus from individual swarm responses.
+
+        Key improvements:
+        1. Stricter response parsing (exact match first, then contains)
+        2. Proper tie-break logic (defaults to NOTHING on ties)
+        3. Minimum confidence threshold enforcement
+        4. Better logging of individual votes
+        """
         try:
             votes = {"BUY": 0, "SELL": 0, "NOTHING": 0}
             model_votes = []
 
             for provider, data in swarm_result["responses"].items():
                 if not data["success"]:
+                    cprint(f"   ⚠️ {provider}: Failed (skipping vote)", "yellow")
                     continue
 
-                response_text = data["response"].strip().upper()
+                response_text = data["response"].strip() if data["response"] else ""
+                response_upper = response_text.upper()
 
-                if "BUY" in response_text:
+                # Parse vote with stricter matching
+                vote = self._parse_vote_from_response(response_upper)
+
+                if vote == "BUY":
                     votes["BUY"] += 1
                     model_votes.append(f"{provider}: Buy")
-                elif "SELL" in response_text:
+                    cprint(f"   ✅ {provider}: BUY", "green")
+                elif vote == "SELL":
                     votes["SELL"] += 1
                     model_votes.append(f"{provider}: Sell")
+                    cprint(f"   🔴 {provider}: SELL", "red")
                 else:
                     votes["NOTHING"] += 1
                     model_votes.append(f"{provider}: Do Nothing")
+                    cprint(f"   ⏸️ {provider}: NOTHING", "cyan")
 
             total_votes = sum(votes.values())
             if total_votes == 0:
+                cprint("❌ No valid responses from swarm - defaulting to NOTHING", "red")
                 return "NOTHING", 0, "No valid responses from swarm"
 
+            # Calculate raw majority
             majority_action = max(votes, key=votes.get)
             majority_count = votes[majority_action]
             confidence = int((majority_count / total_votes) * 100)
 
+            # Check for ties - if there's a tie, default to NOTHING (conservative approach)
+            vote_counts = sorted(votes.values(), reverse=True)
+            has_tie = len(vote_counts) >= 2 and vote_counts[0] == vote_counts[1]
+
+            if has_tie:
+                cprint(
+                    f"\n⚠️ TIE DETECTED: Multiple actions have {majority_count} votes each",
+                    "yellow",
+                    attrs=["bold"]
+                )
+                cprint("   → Defaulting to NOTHING (conservative approach on ties)", "yellow")
+                original_action = majority_action
+                majority_action = "NOTHING"
+                confidence = 0  # No confidence on a tie
+
+                reasoning = f"Swarm Consensus TIE ({total_votes} models voted):\n"
+                reasoning += f"   Buy: {votes['BUY']} votes\n"
+                reasoning += f"   Sell: {votes['SELL']} votes\n"
+                reasoning += f"   Do Nothing: {votes['NOTHING']} votes\n\n"
+                reasoning += f"⚠️ TIE between actions - defaulted to NOTHING for safety\n"
+                reasoning += f"   (Original majority would have been: {original_action})\n\n"
+                reasoning += "Individual votes:\n"
+                reasoning += "\n".join(f"   - {vote}" for vote in model_votes)
+
+                add_console_log(f"⚠️ Swarm TIE - defaulting to NOTHING", "warning")
+
+                return majority_action, confidence, reasoning
+
+            # Check minimum confidence threshold
+            if confidence < MIN_SWARM_CONFIDENCE and majority_action != "NOTHING":
+                cprint(
+                    f"\n⚠️ LOW CONFIDENCE: {confidence}% < {MIN_SWARM_CONFIDENCE}% threshold",
+                    "yellow",
+                    attrs=["bold"]
+                )
+                cprint(f"   → Downgrading {majority_action} to NOTHING", "yellow")
+
+                reasoning = f"Swarm Consensus BELOW THRESHOLD ({total_votes} models voted):\n"
+                reasoning += f"   Buy: {votes['BUY']} votes\n"
+                reasoning += f"   Sell: {votes['SELL']} votes\n"
+                reasoning += f"   Do Nothing: {votes['NOTHING']} votes\n\n"
+                reasoning += f"⚠️ Confidence {confidence}% below {MIN_SWARM_CONFIDENCE}% threshold\n"
+                reasoning += f"   Original recommendation: {majority_action}\n"
+                reasoning += f"   → Downgraded to NOTHING for safety\n\n"
+                reasoning += "Individual votes:\n"
+                reasoning += "\n".join(f"   - {vote}" for vote in model_votes)
+
+                add_console_log(f"⚠️ Low confidence ({confidence}%) - defaulting to NOTHING", "warning")
+
+                return "NOTHING", confidence, reasoning
+
+            # Normal case: clear majority above threshold
             reasoning = f"Swarm Consensus ({total_votes} models voted):\n"
             reasoning += f"   Buy: {votes['BUY']} votes\n"
             reasoning += f"   Sell: {votes['SELL']} votes\n"
             reasoning += f"   Do Nothing: {votes['NOTHING']} votes\n\n"
             reasoning += "Individual votes:\n"
             reasoning += "\n".join(f"   - {vote}" for vote in model_votes)
-            reasoning += f"\n\nMajority decision: {majority_action} ({confidence}% consensus)"
+            reasoning += f"\n\n✅ Majority decision: {majority_action} ({confidence}% consensus)"
 
             cprint(
                 f"\n🌊 Swarm Consensus: {majority_action} with {confidence}% agreement",
@@ -795,6 +871,45 @@ FULL DATASET:
         except Exception as e:
             cprint(f"❌ Error calculating swarm consensus: {e}", "red")
             return "NOTHING", 0, f"Error calculating consensus: {str(e)}"
+
+    def _parse_vote_from_response(self, response_upper):
+        """
+        Parse a vote from the model response with strict matching.
+
+        Priority:
+        1. Exact match (response is exactly "BUY", "SELL", "DO NOTHING")
+        2. Starts with action word
+        3. Contains action word (fallback)
+
+        Returns: "BUY", "SELL", or "NOTHING"
+        """
+        # Clean the response (remove extra whitespace, newlines)
+        response_clean = response_upper.strip().split('\n')[0].strip()
+
+        # Priority 1: Exact match
+        if response_clean in ["BUY", "SELL"]:
+            return response_clean
+        if response_clean in ["DO NOTHING", "NOTHING", "HOLD", "WAIT"]:
+            return "NOTHING"
+
+        # Priority 2: Starts with action word
+        if response_clean.startswith("BUY"):
+            return "BUY"
+        if response_clean.startswith("SELL"):
+            return "SELL"
+        if response_clean.startswith("DO NOTHING") or response_clean.startswith("NOTHING"):
+            return "NOTHING"
+
+        # Priority 3: Contains action word (fallback)
+        # Check SELL first because "SELL" is more specific than "BUY"
+        # (some responses might say "don't buy" which contains "buy")
+        if "SELL" in response_clean:
+            return "SELL"
+        if "BUY" in response_clean:
+            return "BUY"
+
+        # Default to NOTHING if unclear
+        return "NOTHING"
 
     def fetch_all_open_positions(self):
         """
