@@ -98,17 +98,17 @@ class ModelFactory:
     if OpenRouterModel is not None:
         MODEL_IMPLEMENTATIONS["openrouter"] = OpenRouterModel
     
-    # Default models for each type
+    # Default models for each type - OPTIMIZED FOR TRADING
     DEFAULT_MODELS = {
-        "claude": "claude-3-5-haiku-latest",  # Latest fast Claude model
-        "groq": "mixtral-8x7b-32768",        # Fast Mixtral model (production stable)
-        "openai": "gpt-4o",                  # Latest GPT-4 Optimized
-        "gemini": "gemini-2.5-flash",        # Fast Gemini 2.5 model
-        "deepseek": "deepseek-reasoner",     # Enhanced reasoning model
-        "ollama": "llama3.2",                # Meta's Llama 3.2 - balanced performance (local)
-        "ollamafreeapi": "deepseek-coder:6.7b",  # 🌙 DeepSeek Coder - STEM/math expert (FREE!)
-        "xai": "grok-4-fast-reasoning",      # xAI's Grok 4 Fast with reasoning (2M context)
-        "openrouter": "google/gemini-2.5-flash"  # 🌙 OpenRouter - fast & cheap Gemini!
+        "claude": "claude-sonnet-4-5-20250929",  # Claude Sonnet 4.5 - balanced
+        "groq": "mixtral-8x7b-32768",            # Fast Mixtral model
+        "openai": "gpt-4.1-mini",                # GPT-4.1 Mini - efficient
+        "gemini": "gemini-2.5-flash",            # Fast Gemini 2.5 model
+        "deepseek": "deepseek-chat",             # DeepSeek V3 - general purpose
+        "ollama": "deepseek-v3.1:671b",          # DeepSeek V3.1 - best for trading (local)
+        "ollamafreeapi": "deepseek-v3.1:671b",   # DeepSeek V3.1 671B - TRADING OPTIMIZED (FREE!)
+        "xai": "grok-4-1-fast-reasoning",        # xAI's Grok 4.1 - best overall
+        "openrouter": "google/gemini-2.5-flash"  # OpenRouter - fast Gemini
     }
     
     def __init__(self):

@@ -81,29 +81,35 @@ HYPERLIQUID_TOKENS = {
     ]
 }
 
-# Default settings
+# Default settings - OPTIMIZED FOR TRADING
+# Uses OllamaFreeAPI with DeepSeek V3.1 as default (FREE, best for trading)
 DEFAULT_SETTINGS = {
     # Chart settings
-    "timeframe": "30m",           # Default: 30 minutes
-    "days_back": 2,               # Default: 2 days
-    "sleep_minutes": 30,          # Default: 30 minutes between cycles (cycle time)
+    "timeframe": "30m",           # Default: 30 minutes (optimal for trading signals)
+    "days_back": 2,               # Default: 2 days of historical data
+    "sleep_minutes": 15,          # Default: 15 minutes between cycles (active trading)
 
     # Mode settings
     "swarm_mode": "single",       # Default: single (options: single, swarm)
 
-    # Token settings
-    "monitored_tokens": ["ETH", "BTC", "SOL"],  # Default tokens to monitor
+    # Token settings - Main trading tokens
+    "monitored_tokens": ["BTC", "ETH", "SOL", "LTC", "AAVE", "AVAX", "HYPE"],
 
-    # Main AI Model settings (BYOK - Bring Your Own Key)
-    "ai_provider": "gemini",      # Default: gemini (options: anthropic, openai, gemini, deepseek, xai, mistral, cohere, ollama)
-    "ai_model": "gemini-2.5-flash",  # Default model API name
-    "ai_temperature": 0.3,        # Default: 0.3 (0.0 = deterministic, 1.0 = creative)
-    "ai_max_tokens": 2000,        # Default: 2000 tokens
+    # Main AI Model settings - DeepSeek V3.1 (FREE via OllamaFreeAPI)
+    # Option B: DeepSeek v3.2 (Recommended/Advanced) can be used by changing model
+    "ai_provider": "ollamafreeapi",   # FREE API - no key required
+    "ai_model": "deepseek-v3.1:671b", # DeepSeek V3.1 - stable trading model
+    "ai_temperature": 0.6,            # Official DeepSeek recommended "sweet spot"
+    "ai_max_tokens": 8000,            # Increased for multi-step reasoning
+
+    # Alternative configuration (Option B - DeepSeek V3.2):
+    # "ai_model": "deepseek-v3.2",   # Or "deepseek-v3.2:671b-q4_K_M"
+    # "ai_max_tokens": 8192,         # Optimized for V3.2
 
     # Swarm AI Model settings (for multi-agent mode)
     "swarm_models": [
-        # Each model has provider, model, temperature, max_tokens
-        {"provider": "gemini", "model": "gemini-2.5-flash", "temperature": 0.3, "max_tokens": 2000},
+        # DeepSeek for trading analysis
+        {"provider": "ollamafreeapi", "model": "deepseek-v3.1:671b", "temperature": 0.6, "max_tokens": 8000},
     ],
 
     # Timestamp
@@ -174,94 +180,123 @@ def get_available_models_for_provider(provider):
     """
     models = {
         'anthropic': {
-            'claude-opus-4-5-20251101': 'Claude Opus 4.5 - Latest flagship (200K context)',
-            'claude-sonnet-4-5-20250929': 'Claude Sonnet 4.5 - Best balance (200K context) ⚡ Recommended',
-            'claude-haiku-4-5-20251001': 'Claude Haiku 4.5 - Fastest, lowest cost (200K context)',
-            'claude-opus-4-20250514': 'Claude Opus 4 - Powerful reasoning (200K context)',
-            'claude-sonnet-4-20250514': 'Claude Sonnet 4 - Fast, efficient (200K context)',
+            # Clean names for frontend display (no "claude-" prefix)
+            'claude-opus-4-5-20251101': 'Opus 4.5 - Latest flagship',
+            'claude-sonnet-4-5-20250929': 'Sonnet 4.5 - Best balance ⚡ Recommended',
+            'claude-haiku-4-5-20251001': 'Haiku 4.5 - Fastest, lowest cost',
+            'claude-opus-4-20250514': 'Opus 4 - Powerful reasoning',
+            'claude-sonnet-4-20250514': 'Sonnet 4 - Fast, efficient',
         },
         'openai': {
-            'gpt-5.2': 'GPT-5.2 - Latest flagship (400K context)',
-            'gpt-5': 'GPT-5 - Frontier model (400K context)',
-            'gpt-5-mini': 'GPT-5 Mini - Smaller, faster (400K context)',
-            'gpt-4.1': 'GPT-4.1 - Large context (1M context)',
-            'gpt-4.1-mini': 'GPT-4.1 Mini - Efficient (1M context)',
-            'o3': 'o3 - Reasoning model (200K context)',
-            'o3-mini': 'o3-mini - Smaller reasoning (200K context)',
-            'o4-mini': 'o4-mini - Latest reasoning (200K context)',
+            # Clean names for OpenAI
+            'gpt-5.2': 'GPT-5.2 - Latest flagship',
+            'gpt-5': 'GPT-5 - Frontier model',
+            'gpt-5-mini': 'GPT-5 Mini - Fast & efficient',
+            'gpt-4.1': 'GPT-4.1 - 1M context',
+            'gpt-4.1-mini': 'GPT-4.1 Mini - Efficient',
+            'o3': 'o3 - Reasoning model',
+            'o3-mini': 'o3-mini - Compact reasoning',
+            'o4-mini': 'o4-mini - Latest reasoning',
         },
         'gemini': {
-            'gemini-3-pro': 'Gemini 3 Pro - Latest flagship (1M context)',
-            'gemini-3-flash': 'Gemini 3 Flash - Fast, cost-effective (1M context)',
-            'gemini-2.5-pro': 'Gemini 2.5 Pro - Powerful, stable (1M context)',
-            'gemini-2.5-flash': 'Gemini 2.5 Flash - Fast variant (1M context) ⚡ Recommended',
-            'gemini-2.5-flash-lite': 'Gemini 2.5 Flash-Lite - Ultra-efficient (1M context)',
-            'gemini-2.0-flash': 'Gemini 2.0 Flash - Multimodal (1M context)',
-            'gemini-1.5-flash': 'Gemini 1.5 Flash - Legacy fast (1M context)',
-            'gemini-1.5-pro': 'Gemini 1.5 Pro - Legacy pro (1M context)',
+            # Clean names for Gemini
+            'gemini-3-pro': 'Gemini 3 Pro - Latest flagship',
+            'gemini-3-flash': 'Gemini 3 Flash - Fast',
+            'gemini-2.5-pro': 'Gemini 2.5 Pro - Powerful',
+            'gemini-2.5-flash': 'Gemini 2.5 Flash ⚡ Recommended',
+            'gemini-2.5-flash-lite': 'Gemini 2.5 Flash-Lite - Ultra-efficient',
+            'gemini-2.0-flash': 'Gemini 2.0 Flash - Multimodal',
+            'gemini-1.5-flash': 'Gemini 1.5 Flash - Legacy',
+            'gemini-1.5-pro': 'Gemini 1.5 Pro - Legacy',
         },
         'xai': {
-            'grok-4-1-fast-reasoning': 'Grok 4.1 Thinking - Best overall (2M context)',
-            'grok-4-1-fast-non-reasoning': 'Grok 4.1 Non-Thinking - Instant (2M context)',
-            'grok-4-fast-reasoning': 'Grok 4 Reasoning - Tool calling (2M context)',
-            'grok-4-fast-non-reasoning': 'Grok 4 Non-Reasoning - Fast (2M context)',
-            'grok-4': 'Grok 4 - Standard (256K context)',
-            'grok-code-fast-1': 'Grok Code Fast - Coding optimized (256K context)',
+            # Clean names for xAI Grok
+            'grok-4-1-fast-reasoning': 'Grok 4.1 Thinking - Best overall',
+            'grok-4-1-fast-non-reasoning': 'Grok 4.1 Instant - Fast',
+            'grok-4-fast-reasoning': 'Grok 4 Reasoning',
+            'grok-4-fast-non-reasoning': 'Grok 4 Non-Reasoning',
+            'grok-4': 'Grok 4 - Standard',
+            'grok-code-fast-1': 'Grok Code - Coding optimized',
         },
         'deepseek': {
-            'deepseek-thinking-v3.2-exp': 'DeepSeek V3.2 Thinking - Latest reasoning (128K)',
-            'deepseek-non-thinking-v3.2-exp': 'DeepSeek V3.2 Non-Thinking - Fast (128K)',
-            'deepseek-reasoner-v3.1': 'DeepSeek V3.1 Reasoner - Strong reasoning (128K)',
-            'deepseek-chat-v3.1': 'DeepSeek V3.1 Chat - General chat (128K)',
-            'deepseek-chat': 'DeepSeek V3 - General purpose (128K) ⚡ Recommended',
-            'deepseek-reasoner': 'DeepSeek R1 - Open reasoning (128K)',
+            # Clean names for DeepSeek
+            'deepseek-thinking-v3.2-exp': 'DeepSeek V3.2 Thinking ⚡ BEST',
+            'deepseek-non-thinking-v3.2-exp': 'DeepSeek V3.2 Fast',
+            'deepseek-reasoner-v3.1': 'DeepSeek V3.1 Reasoner',
+            'deepseek-chat-v3.1': 'DeepSeek V3.1 Chat',
+            'deepseek-chat': 'DeepSeek V3 ⚡ Recommended',
+            'deepseek-reasoner': 'DeepSeek R1 - Reasoning',
         },
         'mistral': {
-            'mistral-large-latest': 'Mistral Large 3 - Flagship (256K context)',
-            'ministral-14b-latest': 'Ministral 14B - Efficient (128K context)',
-            'ministral-8b-latest': 'Ministral 8B - Small & fast (128K context)',
-            'mistral-small-latest': 'Mistral Small - Cost-effective (128K context) ⚡ Recommended',
-            'devstral-2': 'Devstral 2 - Coding 123B (256K context)',
+            # Clean names for Mistral
+            'mistral-large-latest': 'Mistral Large 3 - Flagship',
+            'ministral-14b-latest': 'Ministral 14B - Efficient',
+            'ministral-8b-latest': 'Ministral 8B - Fast',
+            'mistral-small-latest': 'Mistral Small ⚡ Recommended',
+            'devstral-2': 'Devstral 2 - Coding',
         },
         'cohere': {
-            'command-a': 'Command A - Latest flagship (256K context)',
-            'command-r-plus': 'Command R+ - RAG optimized (128K context)',
-            'command-r': 'Command R - Efficient RAG (128K context)',
-            'command': 'Command - General purpose (128K context)',
+            # Clean names for Cohere
+            'command-a': 'Command A - Latest flagship',
+            'command-r-plus': 'Command R+ - RAG optimized',
+            'command-r': 'Command R - Efficient RAG',
+            'command': 'Command - General purpose',
         },
         'perplexity': {
-            'sonar-pro': 'Sonar Pro - Web-grounded (128K context)',
-            'sonar': 'Sonar - Search-optimized (128K context)',
-            'sonar-reasoning': 'Sonar Reasoning - Deep research (128K context)',
+            # Clean names for Perplexity
+            'sonar-pro': 'Sonar Pro - Web-grounded',
+            'sonar': 'Sonar - Search-optimized',
+            'sonar-reasoning': 'Sonar Reasoning - Deep research',
         },
         'groq': {
-            'mixtral-8x7b-32768': 'Mixtral 8x7B - Fast inference (32K context)',
-            'llama-3.3-70b-versatile': 'Llama 3.3 70B - Versatile (128K context)',
-            'llama-3.2-11b-vision-preview': 'Llama 3.2 11B Vision - Vision capable',
+            # Clean names for Groq (fast inference)
+            'mixtral-8x7b-32768': 'Mixtral 8x7B - Fast inference',
+            'llama-3.3-70b-versatile': 'LLaMA 3.3 70B - Versatile',
+            'llama-3.2-11b-vision-preview': 'LLaMA 3.2 11B Vision',
         },
         'ollama': {
-            'llama3.2': 'Llama 3.2 - Meta\'s balanced model (local)',
-            'deepseek-r1': 'DeepSeek R1 - Reasoning model (local)',
-            'deepseek-coder': 'DeepSeek Coder - STEM/code expert (local)',
-            'qwen3:8b': 'Qwen3 8B - Fast reasoning (local)',
-            'mistral': 'Mistral - General purpose (local)',
+            # DeepSeek V3.2 - BEST for Trading (Local)
+            'deepseek-v3.2': 'DeepSeek V3.2 ⚡ BEST',
+            'deepseek-v3.2:671b-q4_K_M': 'DeepSeek V3.2 Q4 - Memory efficient',
+            # DeepSeek V3.1 - Stable for Trading (Local)
+            'deepseek-v3.1:671b': 'DeepSeek V3.1 671B ⚡ Recommended',
+            'deepseek-v3.1:671b-q4_K_M': 'DeepSeek V3.1 Q4 - Efficient',
+            # Other models (Local)
+            'deepseek-r1': 'DeepSeek R1 - Reasoning',
+            'deepseek-coder': 'DeepSeek Coder - STEM/code',
+            'llama3.2': 'LLaMA 3.2 - Balanced',
+            'llama3.3:70b': 'LLaMA 3.3 70B - Large',
+            'qwen3:8b': 'Qwen3 8B - Fast',
+            'mistral': 'Mistral - General',
         },
         'ollamafreeapi': {
-            'deepseek-coder:6.7b': 'DeepSeek Coder 6.7B - STEM/code expert (FREE) ⚡ Recommended',
-            'deepseek-coder:33b': 'DeepSeek Coder 33B - Advanced coding (FREE)',
-            'deepseek-r1:7b': 'DeepSeek R1 7B - Reasoning model (FREE)',
-            'llama3:8b-instruct': 'LLaMA 3 8B Instruct - General purpose (FREE)',
-            'llama3.3:70b': 'LLaMA 3.3 70B - Large model (FREE)',
-            'llama3:code': 'LLaMA 3 Code - Coding specialized (FREE)',
-            'mistral:7b-v0.2': 'Mistral 7B v0.2 - Efficient general (FREE)',
-            'qwen:7b-chat': 'Qwen 7B Chat - Alibaba chat model (FREE)',
-            'qwen:14b-chat': 'Qwen 14B Chat - Larger Qwen (FREE)',
+            # DeepSeek V3.2 - BEST for Trading (FREE)
+            'deepseek-v3.2': 'DeepSeek V3.2 ⚡ BEST (FREE)',
+            'deepseek-v3.2:671b-q4_K_M': 'DeepSeek V3.2 Q4 (FREE)',
+            # DeepSeek V3.1 - Stable Trading (FREE)
+            'deepseek-v3.1:671b': 'DeepSeek V3.1 ⚡ Recommended (FREE)',
+            'deepseek-v3.1:671b-q4_K_M': 'DeepSeek V3.1 Q4 (FREE)',
+            # Reasoning models (FREE)
+            'deepseek-r1:7b': 'DeepSeek R1 7B (FREE)',
+            'deepseek-r1:14b': 'DeepSeek R1 14B (FREE)',
+            'deepseek-r1:32b': 'DeepSeek R1 32B (FREE)',
+            # Coder models (FREE)
+            'deepseek-coder:6.7b': 'DeepSeek Coder 6.7B (FREE)',
+            'deepseek-coder:33b': 'DeepSeek Coder 33B (FREE)',
+            # LLaMA models (FREE)
+            'llama3:8b-instruct': 'LLaMA 3 8B (FREE)',
+            'llama3.3:70b': 'LLaMA 3.3 70B (FREE)',
+            # Other models (FREE)
+            'mistral:7b-v0.2': 'Mistral 7B (FREE)',
+            'qwen:7b-chat': 'Qwen 7B (FREE)',
+            'qwen3:8b': 'Qwen3 8B (FREE)',
         },
         'openrouter': {
-            'google/gemini-2.5-flash': 'Gemini 2.5 Flash via OpenRouter',
-            'qwen/qwen3-max': 'Qwen 3 Max - Powerful reasoning',
-            'anthropic/claude-opus-4.1': 'Claude Opus 4.1 via OpenRouter',
-            'openai/gpt-5-mini': 'GPT-5 Mini via OpenRouter',
+            # Clean names for OpenRouter
+            'google/gemini-2.5-flash': 'Gemini 2.5 Flash',
+            'qwen/qwen3-max': 'Qwen 3 Max - Reasoning',
+            'anthropic/claude-opus-4.1': 'Claude Opus 4.1',
+            'openai/gpt-5-mini': 'GPT-5 Mini',
         }
     }
     return models.get(provider, {})

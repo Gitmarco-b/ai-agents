@@ -45,14 +45,15 @@ async function updateDashboard() {
         // First check if agent is actively executing
         const statusResponse = await fetch('/api/agent-status');
         const agentStatus = await statusResponse.json();
-        
+
         // If agent is actively executing, do lightweight update
         if (agentStatus.executing) {
             console.log('[Dashboard] Agent executing - lightweight update only');
 
             // Only update timestamp and agent badge (no API calls)
             updateTimestamp();
-            updateAgentBadge(agentStatus.running, agentStatus.executing);
+            // FIX: Use agent_running (not running) to match API response
+            updateAgentBadge(agentStatus.agent_running, agentStatus.executing);
 
             return; // Skip heavy updates
         }
@@ -429,19 +430,27 @@ function clearConsole() {
 async function runAgent() {
     try {
         addConsoleMessage('Starting trading agent...', 'info');
+
+        // Immediate visual feedback - show starting state
+        updateAgentBadge(true, false);
+
         const response = await fetch('/api/start', { method: 'POST' });
         const data = await response.json();
-        
+
         if (data.status === 'started') {
             addConsoleMessage('Trading agent started successfully', 'success');
-            updateDashboard(); // Immediate update
+            updateDashboard(); // Full update to sync state
         } else if (data.status === 'already_running') {
             addConsoleMessage('Agent is already running', 'warning');
         } else {
             addConsoleMessage(data.message, 'warning');
+            // Revert visual state on failure
+            updateAgentBadge(false, false);
         }
     } catch (error) {
         addConsoleMessage(`Error starting agent: ${error.message}`, 'error');
+        // Revert visual state on error
+        updateAgentBadge(false, false);
     }
 }
 
@@ -449,19 +458,33 @@ async function runAgent() {
 async function stopAgent() {
     try {
         addConsoleMessage('Stopping trading agent...', 'info');
+
+        // Immediate visual feedback - show stopping state
+        const badge = document.getElementById('agent-badge');
+        badge.textContent = 'stopping...';
+        badge.className = 'agent-badge stopping';
+
         const response = await fetch('/api/stop', { method: 'POST' });
         const data = await response.json();
-        
+
         if (data.status === 'stopped') {
             addConsoleMessage('Trading agent stopped successfully', 'info');
-            updateDashboard(); // Immediate update
+            // FIX: Immediately update button state to show Start button
+            updateAgentBadge(false, false);
+            // Then do full dashboard update
+            updateDashboard();
         } else if (data.status === 'not_running') {
             addConsoleMessage('Agent is not running', 'warning');
+            updateAgentBadge(false, false);
         } else {
             addConsoleMessage(data.message, 'warning');
+            // Revert to running state on unexpected response
+            updateAgentBadge(true, false);
         }
     } catch (error) {
         addConsoleMessage(`Error stopping agent: ${error.message}`, 'error');
+        // On error, refresh to get actual state
+        updateDashboard();
     }
 }
 

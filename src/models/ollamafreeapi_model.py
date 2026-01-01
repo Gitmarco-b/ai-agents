@@ -16,16 +16,55 @@ class OllamaFreeAPIModel(BaseModel):
     """Implementation for OllamaFreeAPI - free access to 650+ models"""
 
     # Available models through OllamaFreeAPI
-    # These are the most stable and recommended models
+    # These are the most stable and recommended models for trading
     AVAILABLE_MODELS = {
-        # DeepSeek Models - STEM and Coding experts
+        # ===== DeepSeek V3.2 (BEST for Trading) =====
+        "deepseek-v3.2": {
+            "description": "DeepSeek V3.2 - Latest flagship trading model (FREE) ⚡ BEST",
+            "parameters": "671B",
+            "specialty": "trading",
+            "recommended": True
+        },
+        "deepseek-v3.2:671b-q4_K_M": {
+            "description": "DeepSeek V3.2 Quantized - Memory efficient (FREE, Q4_K_M)",
+            "parameters": "671B",
+            "specialty": "trading",
+            "recommended": True
+        },
+
+        # ===== DeepSeek V3.1 (RECOMMENDED for Trading) =====
+        "deepseek-v3.1:671b": {
+            "description": "DeepSeek V3.1 671B - Stable trading model (FREE) ⚡ Recommended",
+            "parameters": "671B",
+            "specialty": "trading",
+            "recommended": True
+        },
+        "deepseek-v3.1:671b-q4_K_M": {
+            "description": "DeepSeek V3.1 Quantized - Efficient trading (FREE, Q4_K_M)",
+            "parameters": "671B",
+            "specialty": "trading"
+        },
+
+        # ===== DeepSeek Reasoning Models =====
         "deepseek-r1:7b": {
             "description": "DeepSeek R1 7B - Reasoning model (FREE, 7B parameters)",
             "parameters": "7B",
             "specialty": "reasoning"
         },
+        "deepseek-r1:14b": {
+            "description": "DeepSeek R1 14B - Enhanced reasoning (FREE, 14B)",
+            "parameters": "14B",
+            "specialty": "reasoning"
+        },
+        "deepseek-r1:32b": {
+            "description": "DeepSeek R1 32B - Strong reasoning (FREE, 32B)",
+            "parameters": "32B",
+            "specialty": "reasoning"
+        },
+
+        # ===== DeepSeek Coder =====
         "deepseek-coder:6.7b": {
-            "description": "DeepSeek Coder - STEM and code expert (FREE, 6.7B) ⚡ Recommended",
+            "description": "DeepSeek Coder - STEM and code expert (FREE, 6.7B)",
             "parameters": "6.7B",
             "specialty": "coding"
         },
@@ -35,7 +74,7 @@ class OllamaFreeAPIModel(BaseModel):
             "specialty": "coding"
         },
 
-        # LLaMA Models - Meta's open models
+        # ===== LLaMA Models - Meta's open models =====
         "llama3:8b-instruct": {
             "description": "LLaMA 3 8B Instruct - General purpose (FREE, 8B)",
             "parameters": "8B",
@@ -52,19 +91,14 @@ class OllamaFreeAPIModel(BaseModel):
             "specialty": "coding"
         },
 
-        # Mistral Models
+        # ===== Mistral Models =====
         "mistral:7b-v0.2": {
             "description": "Mistral 7B v0.2 - Efficient general model (FREE, 7B)",
             "parameters": "7B",
             "specialty": "general"
         },
-        "mistral:storyteller": {
-            "description": "Mistral Storyteller - Creative writing (FREE, 7B)",
-            "parameters": "7B",
-            "specialty": "creative"
-        },
 
-        # Qwen Models
+        # ===== Qwen Models =====
         "qwen:7b-chat": {
             "description": "Qwen 7B Chat - Alibaba's chat model (FREE, 7B)",
             "parameters": "7B",
@@ -75,14 +109,19 @@ class OllamaFreeAPIModel(BaseModel):
             "parameters": "14B",
             "specialty": "chat"
         },
+        "qwen3:8b": {
+            "description": "Qwen3 8B - Fast reasoning (FREE, 8B)",
+            "parameters": "8B",
+            "specialty": "reasoning"
+        },
     }
 
-    def __init__(self, api_key=None, model_name="deepseek-coder:6.7b", **kwargs):
+    def __init__(self, api_key=None, model_name="deepseek-v3.1:671b", **kwargs):
         """Initialize OllamaFreeAPI model
 
         Args:
             api_key: Not used - OllamaFreeAPI is free! Kept for compatibility.
-            model_name: Name of the model to use (default: deepseek-coder:6.7b)
+            model_name: Name of the model to use (default: deepseek-v3.1:671b - trading optimized)
         """
         self.model_name = model_name
         self.client = None
