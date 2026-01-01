@@ -51,6 +51,7 @@ if project_root not in sys.path:
 from src.models import model_factory
 from src.agents.swarm_agent import SwarmAgent
 from src.data.ohlcv_collector import collect_all_tokens
+from src.agents.strategy_agent import StrategyAgent
 
 # Import shared logging utility (prevents circular import with trading_app)
 try:
@@ -605,6 +606,20 @@ class TradingAgent:
         self.recommendations_df = pd.DataFrame(
             columns=["token", "action", "confidence", "reasoning"]
         )
+
+            # --- StrategyAgent (non-executing) ---
+            try:
+                self.strategy_agent = StrategyAgent(execute_signals=False)
+                cprint("✅ StrategyAgent initialized (execute_signals=False)", "green")
+            except Exception as e:
+                self.strategy_agent = None
+                cprint(f"⚠️ StrategyAgent failed to initialize: {e}", "yellow")
+
+            # Simple in-memory cache for enriched strategy contexts per token
+            self._strategy_context_cache = {}  # token -> {'data': ..., 'expires_at': datetime}
+            self.STRATEGY_CONTEXT_TTL = 120  # seconds (tune for your timeframe)
+
+
 
         # Show which tokens will be analyzed
         cprint("\n🎯 Active Tokens for Trading:", "yellow", attrs=["bold"])
