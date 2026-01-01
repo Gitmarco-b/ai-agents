@@ -1,5 +1,5 @@
 """
-🌙 Moon Dev's Strategy Agent
+Strategy Agent
 Handles all strategy-based trading decisions
 """
 
