@@ -109,8 +109,14 @@ AI_MAX_TOKENS = 8000                  # Increased for multi-step reasoning
 AI_TEMPERATURE = 0.6                  # Official DeepSeek recommended "sweet spot"
 
 # Trading Strategy Agent Settings
-ENABLE_STRATEGIES = True 
+ENABLE_STRATEGIES = True
 STRATEGY_MIN_CONFIDENCE = 0.6   # 60% confidence threshold
+
+# ⚡ WebSocket Settings (Real-time data feeds)
+# Set to True to use WebSocket for price/orderbook data instead of API polling
+# This reduces API calls and provides faster updates
+USE_WEBSOCKET_FEEDS = True  # Feature flag for gradual rollout
+WEBSOCKET_FALLBACK_TO_API = True  # If WebSocket fails, fall back to API polling
 
 # Legacy/Solana Variables (Kept to prevent errors, but ignored)
 symbol = 'SOL'
