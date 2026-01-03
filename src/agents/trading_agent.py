@@ -1508,6 +1508,7 @@ Return ONLY valid JSON with the following structure:
                     swarm_result
                 )
 
+                # Store the recommendation only — no trade execution here
                 self.recommendations_df = pd.concat(
                     [
                         self.recommendations_df,
@@ -1528,40 +1529,18 @@ Return ONLY valid JSON with the following structure:
                 cprint(f"✅ Swarm analysis complete for {token[:8]}!", "green")
                 add_console_log(f"✅ Swarm  {token} -> {action} | {confidence}% Sure", "success")
 
-                # ============================================================
-                # 🧠 NEW: Swarm Execution Pipeline (Phase 1–3)
-                # ============================================================
-                try:
-                    cprint("\n⚙️  Initiating Swarm Execution Pipeline...", "cyan")
-                    # Phase 1: Close opposite signals
-                    self.handle_exits()
-
-                    # Phase 2: Allocate new portfolio sizing
-                    allocations = self.allocate_portfolio()
-
-                    # Phase 3: Execute allocations if available
-                    if allocations and isinstance(allocations, dict) and len(allocations) > 0:
-                        self.execute_allocations(allocations)
-                        cprint("✅ Swarm execution complete!", "green", attrs=["bold"])
-                        add_console_log("✅ Swarm execution complete", "success")
-                    else:
-                        cprint("ℹ️  No valid allocations to execute.", "yellow")
-                        add_console_log("No allocations to execute", "info")
-
-                except Exception as exec_err:
-                    cprint(f"❌ Swarm execution pipeline failed: {exec_err}", "red")
-                    import traceback
-                    traceback.print_exc()
-                    add_console_log(f"Swarm execution pipeline error: {exec_err}", "error")
-
-                # Return full swarm output for dashboard/logging
+                # Return raw result for dashboard or debugging
                 return swarm_result
 
             # ============================================================
-            # SINGLE MODEL MODE (unchanged)
+            # SINGLE MODEL MODE
             # ============================================================
             else:
+                # -----------------------------
+                # Enriched strategy context
+                # -----------------------------
                 try:
+                    # robust token name detection
                     if isinstance(market_data, dict):
                         token_name = market_data.get("symbol") or market_data.get("token") or token
                     else:
@@ -1571,6 +1550,7 @@ Return ONLY valid JSON with the following structure:
                     strategy_context_text = "No strategy intelligence available."
                     strategy_context_json = {}
 
+                    # Attempt to get enriched context from StrategyAgent (cached)
                     try:
                         strat_obj = self._get_cached_strategy_context(token_name)
                     except Exception as e:
@@ -1582,6 +1562,7 @@ Return ONLY valid JSON with the following structure:
                         add_console_log("Strategies loaded", "success")
 
                     else:
+                        # fallback to legacy market_data['strategy_signals'] if present
                         if isinstance(market_data, dict) and "strategy_signals" in market_data:
                             try:
                                 strategy_context_text = (
@@ -1596,6 +1577,7 @@ Return ONLY valid JSON with the following structure:
                             strategy_context_text = "No strategy intelligence available."
                             strategy_context_json = {}
 
+                    # store last context for debug / dashboard
                     self.last_strategy_context = strategy_context_json
 
                 except Exception as e:
@@ -2391,37 +2373,33 @@ Return ONLY valid JSON with the following structure:
                 return
 
             # ================================================================
-            # SWARM EXECUTION PIPELINE (NEW)
+            # 🚀 EXECUTION AFTER ALL ANALYSIS
             # ================================================================
             if self.use_swarm_mode:
                 try:
-                    cprint("\n🌊 SWARM MODE ACTIVE - Running unified execution pipeline...", "cyan", attrs=["bold"])
-                    add_console_log("🌊 Swarm mode active - executing unified pipeline", "info")
+                    cprint("\n♾️ SWARM MODE ACTIVE — executing unified pipeline after all analyses...", "cyan", attrs=["bold"])
+                    add_console_log("♾️ Swarm — allocation starting", "info")
 
                     # Phase 1: Close contradictory positions
                     self.handle_exits()
 
-                    # Phase 2: Allocate smart portfolio
+                    # Phase 2: Smart allocation
                     allocations = self.allocate_portfolio()
 
-                    # Phase 3: Execute allocations if valid
+                    # Phase 3: Execute trades if valid
                     if allocations and isinstance(allocations, dict) and len(allocations) > 0:
                         self.execute_allocations(allocations)
                         cprint("✅ Swarm unified execution complete!", "green", attrs=["bold"])
-                        add_console_log("✅ Swarm unified execution complete", "success")
+                        add_console_log("✅ Execution complete", "success")
                     else:
-                        cprint("ℹ️  No actionable allocations from swarm.", "yellow")
-                        add_console_log("ℹ️ No actionable allocations from swarm", "info")
+                        cprint("ℹ️ No actionable allocations generated by swarm.", "yellow")
+                        add_console_log("ℹ️ No actionable allocations to execute", "info")
 
                 except Exception as swarm_err:
-                    cprint(f"❌ Swarm execution pipeline failed: {swarm_err}", "red")
+                    cprint(f"❌ Swarm unified execution failed: {swarm_err}", "red")
                     import traceback
                     traceback.print_exc()
-                    add_console_log(f"Swarm execution pipeline error: {swarm_err}", "error")
-
-                # Skip manual phase logic (already handled above)
-                cprint("\n✅ Skipping manual PHASE 1-3 since swarm executed automatically", "cyan")
-                add_console_log("Skipping manual phase pipeline (swarm handled it)", "info")
+                    add_console_log(f"Swarm unified execution error: {swarm_err}", "error")
 
             else:
                 # ================================================================
