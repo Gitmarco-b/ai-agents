@@ -14,19 +14,65 @@ class OpenRouterModel(BaseModel):
     """Implementation for OpenRouter's model routing"""
 
     AVAILABLE_MODELS = {
-        # Qwen Models
-        "qwen/qwen3-vl-32b-instruct": {
-            "description": "Qwen 3 VL 32B - Vision & Language - 32k context",
-            "input_price": "$0.25/1M tokens",
-            "output_price": "$0.25/1M tokens"
+        # ============================================================================
+        # 🆓 FREE MODELS (No cost - recommended for testing)
+        # ============================================================================
+        "deepseek/deepseek-chat-v3.1:free": {
+            "description": "(FREE) DeepSeek V3.1 - 671B hybrid reasoning - 128k context",
+            "input_price": "FREE",
+            "output_price": "FREE"
         },
-        "qwen/qwen3-max": {
-            "description": "Qwen 3 Max - Flagship model - 32k context",
-            "input_price": "$1.00/1M tokens",
-            "output_price": "$1.00/1M tokens"
+        "google/gemini-2.0-flash-exp:free": {
+            "description": "(FREE) Gemini 2.0 Flash - Fast multimodal - 1M context",
+            "input_price": "FREE",
+            "output_price": "FREE"
+        },
+        "nvidia/nemotron-nano-9b-v2:free": {
+            "description": "(FREE) Nemotron Nano 9B - Compact reasoning model - 32k context",
+            "input_price": "FREE",
+            "output_price": "FREE"
         },
 
-        # Google Gemini Models
+        # ============================================================================
+        # 🚀 XAI GROK MODELS
+        # ============================================================================
+        "x-ai/grok-4.1-fast": {
+            "description": "Grok 4.1 Fast - Best agentic tool calling - 2M context",
+            "input_price": "$0.20/1M tokens",
+            "output_price": "$0.50/1M tokens"
+        },
+
+        # ============================================================================
+        # 🧮 DEEPSEEK MODELS
+        # ============================================================================
+        "deepseek/deepseek-chat-v3.1": {
+            "description": "DeepSeek V3.1 - 671B hybrid reasoning - 128k context",
+            "input_price": "$0.20/1M tokens",
+            "output_price": "$0.80/1M tokens"
+        },
+        "deepseek/deepseek-reasoner": {
+            "description": "DeepSeek Reasoner - Advanced reasoning model - 64k context",
+            "input_price": "$0.55/1M tokens",
+            "output_price": "$2.19/1M tokens"
+        },
+
+        # ============================================================================
+        # 🔮 QWEN MODELS
+        # ============================================================================
+        "qwen/qwen3-max": {
+            "description": "Qwen 3 Max - Flagship model - 256k context",
+            "input_price": "$1.20/1M tokens",
+            "output_price": "$6.00/1M tokens"
+        },
+        "qwen/qwen-plus": {
+            "description": "Qwen Plus - Balanced performance - 131k context",
+            "input_price": "$0.40/1M tokens",
+            "output_price": "$1.20/1M tokens"
+        },
+
+        # ============================================================================
+        # 🌐 GOOGLE GEMINI MODELS
+        # ============================================================================
         "google/gemini-2.5-pro": {
             "description": "Gemini 2.5 Pro - Advanced reasoning - 128k context",
             "input_price": "$1.25/1M tokens",
@@ -38,70 +84,36 @@ class OpenRouterModel(BaseModel):
             "output_price": "$0.40/1M tokens"
         },
 
-        # GLM Models
-        "z-ai/glm-4.6": {
-            "description": "GLM 4.6 - Zhipu AI - 128k context",
-            "input_price": "$0.50/1M tokens",
-            "output_price": "$0.50/1M tokens"
+        # ============================================================================
+        # 🤖 ANTHROPIC CLAUDE MODELS
+        # ============================================================================
+        "anthropic/claude-sonnet-4": {
+            "description": "Claude Sonnet 4 - Balanced performance - 200k context",
+            "input_price": "$3.00/1M tokens",
+            "output_price": "$15.00/1M tokens"
+        },
+        "anthropic/claude-haiku-3.5": {
+            "description": "Claude Haiku 3.5 - Fast & efficient - 200k context",
+            "input_price": "$0.80/1M tokens",
+            "output_price": "$4.00/1M tokens"
         },
 
-        # DeepSeek Models
-        "deepseek/deepseek-r1-0528": {
-            "description": "DeepSeek R1 - Advanced reasoning - 64k context",
-            "input_price": "$0.55/1M tokens",
-            "output_price": "$2.19/1M tokens"
+        # ============================================================================
+        # 🔥 OPENAI MODELS
+        # ============================================================================
+        "openai/gpt-4o": {
+            "description": "GPT-4o - OpenAI flagship multimodal - 128k context",
+            "input_price": "$2.50/1M tokens",
+            "output_price": "$10.00/1M tokens"
         },
-
-        # OpenAI Models
-        "openai/gpt-4.5-preview": {
-            "description": "GPT-4.5 Preview - Latest OpenAI flagship - 128k context",
-            "input_price": "See openrouter.ai/docs",
-            "output_price": "See openrouter.ai/docs"
+        "openai/gpt-4o-mini": {
+            "description": "GPT-4o Mini - Fast & cheap - 128k context",
+            "input_price": "$0.15/1M tokens",
+            "output_price": "$0.60/1M tokens"
         },
-        "openai/gpt-5": {
-            "description": "GPT-5 - Next-gen OpenAI model - 200k context",
-            "input_price": "See openrouter.ai/docs",
-            "output_price": "See openrouter.ai/docs"
-        },
-        "openai/gpt-5-mini": {
-            "description": "GPT-5 Mini - Fast & efficient - 128k context",
-            "input_price": "See openrouter.ai/docs",
-            "output_price": "See openrouter.ai/docs"
-        },
-        "openai/gpt-5-nano": {
-            "description": "GPT-5 Nano - Ultra-fast & cheap - 64k context",
-            "input_price": "See openrouter.ai/docs",
-            "output_price": "See openrouter.ai/docs"
-        },
-
-        # Anthropic Claude Models
-        "anthropic/claude-sonnet-4.5": {
-            "description": "Claude Sonnet 4.5 - Balanced performance - 200k context",
-            "input_price": "See openrouter.ai/docs",
-            "output_price": "See openrouter.ai/docs"
-        },
-        "anthropic/claude-haiku-4.5": {
-            "description": "Claude Haiku 4.5 - Fast & efficient - 200k context",
-            "input_price": "See openrouter.ai/docs",
-            "output_price": "See openrouter.ai/docs"
-        },
-        "anthropic/claude-opus-4.1": {
-            "description": "Claude Opus 4.1 - Most powerful - 200k context",
-            "input_price": "See openrouter.ai/docs",
-            "output_price": "See openrouter.ai/docs"
-        },
-
-        # 🌙 Moon Dev: ADD MORE MODELS HERE!
-        # Copy the format above and paste model info from https://openrouter.ai/docs
-        # Example:
-        # "provider/model-name": {
-        #     "description": "Model description - features - context window",
-        #     "input_price": "$X.XX/1M tokens",
-        #     "output_price": "$X.XX/1M tokens"
-        # },
     }
 
-    def __init__(self, api_key: str, model_name: str = "google/gemini-2.5-flash", **kwargs):
+    def __init__(self, api_key: str, model_name: str = "deepseek/deepseek-chat-v3.1:free", **kwargs):
         # Validate API key
         if not api_key or len(api_key.strip()) == 0:
             raise ValueError("API key is empty or None")

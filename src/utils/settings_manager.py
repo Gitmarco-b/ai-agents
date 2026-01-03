@@ -307,11 +307,27 @@ def get_available_models_for_provider(provider):
             'qwen3:8b': 'Qwen3 8B (FREE)',
         },
         'openrouter': {
-            # Clean names for OpenRouter
-            'google/gemini-2.5-flash': 'Gemini 2.5 Flash',
-            'qwen/qwen3-max': 'Qwen 3 Max - Reasoning',
-            'anthropic/claude-opus-4.1': 'Claude Opus 4.1',
-            'openai/gpt-5-mini': 'GPT-5 Mini',
+            # 🆓 FREE Models (No cost)
+            'deepseek/deepseek-chat-v3.1:free': '(FREE) DeepSeek V3.1 - 671B hybrid reasoning ⭐ DEFAULT',
+            'google/gemini-2.0-flash-exp:free': '(FREE) Gemini 2.0 Flash - Fast multimodal',
+            'nvidia/nemotron-nano-9b-v2:free': '(FREE) Nemotron Nano 9B - Compact reasoning',
+            # xAI Grok Models
+            'x-ai/grok-4.1-fast': 'Grok 4.1 Fast - Best agentic tool calling (2M context)',
+            # DeepSeek Models
+            'deepseek/deepseek-chat-v3.1': 'DeepSeek V3.1 - 671B hybrid reasoning',
+            'deepseek/deepseek-reasoner': 'DeepSeek Reasoner - Advanced reasoning',
+            # Qwen Models
+            'qwen/qwen3-max': 'Qwen 3 Max - Flagship model (256k context)',
+            'qwen/qwen-plus': 'Qwen Plus - Balanced performance',
+            # Google Gemini
+            'google/gemini-2.5-pro': 'Gemini 2.5 Pro - Advanced reasoning',
+            'google/gemini-2.5-flash': 'Gemini 2.5 Flash - Fast multimodal',
+            # Anthropic Claude
+            'anthropic/claude-sonnet-4': 'Claude Sonnet 4 - Balanced performance',
+            'anthropic/claude-haiku-3.5': 'Claude Haiku 3.5 - Fast & efficient',
+            # OpenAI
+            'openai/gpt-4o': 'GPT-4o - Flagship multimodal',
+            'openai/gpt-4o-mini': 'GPT-4o Mini - Fast & cheap',
         }
     }
     return models.get(provider, {})
@@ -319,7 +335,7 @@ def get_available_models_for_provider(provider):
 
 def validate_ai_provider(provider):
     """Validate AI provider"""
-    valid_providers = ['anthropic', 'openai', 'gemini', 'deepseek', 'xai', 'mistral', 'cohere', 'perplexity', 'groq', 'ollama', 'ollamafreeapi', 'openrouter']
+    valid_providers = ['openrouter', 'anthropic', 'openai', 'gemini', 'deepseek', 'xai', 'mistral', 'cohere', 'perplexity', 'groq', 'ollama', 'ollamafreeapi']
     return provider in valid_providers
 
 

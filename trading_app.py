@@ -1410,8 +1410,8 @@ def get_ai_models():
             })
         else:
             # Get all providers and their models
-            all_providers = ['anthropic', 'openai', 'gemini', 'deepseek', 'xai',
-                           'mistral', 'cohere', 'perplexity', 'groq', 'ollama', 'ollamafreeapi', 'openrouter']
+            all_providers = ['openrouter', 'anthropic', 'openai', 'gemini', 'deepseek', 'xai',
+                           'mistral', 'cohere', 'perplexity', 'groq', 'ollama', 'ollamafreeapi']
 
             all_models = {}
             for p in all_providers:

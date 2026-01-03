@@ -141,13 +141,33 @@ OLLAMA_MODELS = {
 # 🌐 OPENROUTER MODELS (200+ Models)
 # ============================================================================
 OPENROUTER_MODELS = {
-    # Top Models for Trading
-    "anthropic/claude-3.5-sonnet": "Claude 3.5 Sonnet via OpenRouter",
-    "openai/gpt-4o": "GPT-4 Omni via OpenRouter",
-    "google/gemini-2.0-flash-exp:free": "Gemini 2.0 Flash FREE",
-    "meta-llama/llama-3.3-70b-instruct": "Llama 3.3 70B",
-    "deepseek/deepseek-chat": "DeepSeek Chat via OpenRouter",
-    "x-ai/grok-beta": "Grok Beta via OpenRouter",
+    # 🆓 FREE Models (No cost)
+    "deepseek/deepseek-chat-v3.1:free": "(FREE) DeepSeek V3.1 - 671B hybrid reasoning",
+    "google/gemini-2.0-flash-exp:free": "(FREE) Gemini 2.0 Flash - Fast multimodal",
+    "nvidia/nemotron-nano-9b-v2:free": "(FREE) Nemotron Nano 9B - Compact reasoning",
+
+    # 🚀 xAI Grok Models
+    "x-ai/grok-4.1-fast": "Grok 4.1 Fast - Best agentic tool calling (2M context)",
+
+    # 🧮 DeepSeek Models
+    "deepseek/deepseek-chat-v3.1": "DeepSeek V3.1 - 671B hybrid reasoning",
+    "deepseek/deepseek-reasoner": "DeepSeek Reasoner - Advanced reasoning",
+
+    # 🔮 Qwen Models
+    "qwen/qwen3-max": "Qwen 3 Max - Flagship model (256k context)",
+    "qwen/qwen-plus": "Qwen Plus - Balanced performance",
+
+    # 🌐 Google Gemini
+    "google/gemini-2.5-pro": "Gemini 2.5 Pro - Advanced reasoning",
+    "google/gemini-2.5-flash": "Gemini 2.5 Flash - Fast multimodal",
+
+    # 🤖 Anthropic Claude
+    "anthropic/claude-sonnet-4": "Claude Sonnet 4 - Balanced performance",
+    "anthropic/claude-haiku-3.5": "Claude Haiku 3.5 - Fast & efficient",
+
+    # 🔥 OpenAI
+    "openai/gpt-4o": "GPT-4o - Flagship multimodal",
+    "openai/gpt-4o-mini": "GPT-4o Mini - Fast & cheap",
 }
 
 # ============================================================================
@@ -175,9 +195,9 @@ TRADING_RECOMMENDED = {
         "description": "Best for strategy development"
     },
     "free": {
-        "model": "google/gemini-2.0-flash-exp:free",
+        "model": "deepseek/deepseek-chat-v3.1:free",
         "provider": "openrouter",
-        "description": "Free tier with good performance"
+        "description": "FREE DeepSeek V3.1 - Best free model for trading"
     }
 }
 
