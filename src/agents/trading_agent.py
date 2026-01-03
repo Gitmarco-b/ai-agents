@@ -402,6 +402,56 @@ RESPONSE FORMAT EXAMPLES:
 
 RESPOND WITH ONLY: ACTION | CONFIDENCE%"""
 
+SMART_ALLOCATION_PROMPT = """You are an expert portfolio allocation AI for cryptocurrency trading.
+
+CURRENT PORTFOLIO STATE:
+{portfolio_state}
+
+AI TRADING SIGNALS:
+{signals}
+
+ACCOUNT INFO:
+- Available Balance: ${available_balance:.2f}
+- Leverage: {leverage}x
+- Max Position %: {max_position_pct}%
+- Cash Buffer: {cash_buffer_pct}%
+- Minimum Order: ${min_order:.2f} notional
+
+YOUR TASK:
+Analyze the current positions and AI signals to create an OPTIMAL allocation plan.
+
+ALLOCATION RULES:
+1. Higher confidence signals deserve larger allocations
+2. Consider reallocating from underperforming positions (negative PnL) to stronger opportunities
+3. Keep at least {cash_buffer_pct}% as cash buffer
+4. Each position's margin should not exceed {max_position_pct}% of total equity
+5. Account for existing positions - don't over-allocate to positions already at target size
+6. Factor in position PnL when deciding to hold, reduce, or close
+7. BUY signals = LONG positions, SELL signals = SHORT positions (if not LONG_ONLY)
+
+RESPOND WITH ONLY A VALID JSON OBJECT in this exact format:
+{{
+    "actions": [
+        {{"symbol": "BTC", "action": "OPEN_LONG", "margin_usd": 50.00, "reason": "High confidence BUY signal"}},
+        {{"symbol": "ETH", "action": "CLOSE", "reason": "SELL signal contradicts LONG position"}},
+        {{"symbol": "SOL", "action": "REDUCE", "reduce_by_usd": 100.00, "reason": "Reallocating to higher conviction trade"}},
+        {{"symbol": "LTC", "action": "HOLD", "reason": "Position aligned with signal, PnL positive"}},
+        {{"symbol": "AAVE", "action": "OPEN_SHORT", "margin_usd": 25.00, "reason": "SELL signal, opening short"}}
+    ],
+    "cash_buffer_usd": 50.00,
+    "reasoning": "Brief explanation of overall allocation strategy"
+}}
+
+ACTION TYPES:
+- OPEN_LONG: Open new long position (requires margin_usd)
+- OPEN_SHORT: Open new short position (requires margin_usd)
+- INCREASE: Add to existing position (requires margin_usd)
+- REDUCE: Reduce existing position (requires reduce_by_usd in notional)
+- CLOSE: Close position entirely
+- HOLD: Keep position as-is
+
+CRITICAL: Return ONLY the JSON object, no markdown, no explanation outside the JSON."""
+
 POSITION_ANALYSIS_PROMPT = """
 You are an expert crypto trading analyst. Your task is to analyze the user's open positions based on the provided position summaries and current market data.
 
@@ -1659,415 +1709,500 @@ Return ONLY valid JSON with the following structure:
 
     def allocate_portfolio(self):
         """
-        Smart Portfolio Allocation - Equal Distribution for LONGs and SHORTs
+        AI-Driven Smart Portfolio Allocation
 
-        CRITICAL: This implements SMART POSITION SIZING to prevent all funds
-        from going to the first position. Funds are distributed EQUALLY across
-        all actionable recommendations (BUY for LONG, SELL for SHORT).
+        Uses AI to analyze:
+        1. Current open positions with P&L
+        2. AI trading signals with confidence levels
+        3. Available balance and risk parameters
 
-        Strategy:
-        1. Get all BUY recommendations (LONG) and SELL recommendations (SHORT if not LONG_ONLY)
-        2. Calculate available margin (90% of account balance)
-        3. Divide equally among all actionable tokens
-        4. Ensure minimum order size ($12 notional / leverage)
-        5. NO PARTIAL CLOSES - positions are binary (KEEP 100% or CLOSE 100%)
+        The AI decides optimal allocation including:
+        - Which positions to close/reduce (reallocate capital)
+        - Which positions to open/increase
+        - Allocation amounts based on confidence
 
         Returns:
-            dict: {token: {'amount': margin, 'direction': 'LONG'/'SHORT'}, ...}
+            list: List of action dictionaries from AI, or empty list if no actions
         """
         try:
             cprint("\n" + "=" * 60, "cyan")
-            cprint("💰 SMART PORTFOLIO ALLOCATION", "white", "on_blue", attrs=["bold"])
+            cprint("🧠 AI-DRIVEN SMART ALLOCATION", "white", "on_blue", attrs=["bold"])
             cprint("=" * 60, "cyan")
 
-            # --- NEW: make allocator aware of open positions ----------------
+            # ================================================================
+            # STEP 1: Collect Current Portfolio State
+            # ================================================================
             open_positions = {}
-            try:
-                for sym in self.symbols:
-                    try:
+            total_position_value = 0
+
+            for sym in self.symbols:
+                try:
+                    if EXCHANGE == "HYPERLIQUID":
                         pos_data = n.get_position(sym, self.account)
-                        _, im_in_pos, pos_size, _, entry_px, pnl, is_long = pos_data
-                        if im_in_pos and pos_size != 0:
-                            open_positions[sym] = {
-                                "notional": abs(pos_size * entry_px),
-                                "is_long": is_long,
-                                "entry_px": entry_px,
-                                "pnl": pnl,
-                            }
-                    except Exception:
-                        continue
-                if len(open_positions) > 0:
-                    cprint(f"📊 Currently open positions: {len(open_positions)}", "cyan")
-                else:
-                    cprint("📊 No open positions detected.", "cyan")
-            except Exception as e:
-                cprint(f"⚠️ Error fetching open positions: {e}", "yellow")
-            # -----------------------------------------------------------------
+                    else:
+                        pos_data = n.get_position(sym)
 
-            # Filter BUY recommendations (for LONG positions)
-            buy_recommendations = self.recommendations_df[
-                self.recommendations_df["action"] == "BUY"
-            ]
+                    _, im_in_pos, pos_size, _, entry_px, pnl_pct, is_long = pos_data
 
-            # Filter SELL recommendations (for SHORT positions if not LONG_ONLY)
-            sell_recommendations = pd.DataFrame()
-            if not LONG_ONLY:
-                sell_recommendations = self.recommendations_df[
-                    self.recommendations_df["action"] == "SELL"
-                ]
+                    if im_in_pos and pos_size != 0:
+                        notional = abs(float(pos_size) * float(entry_px))
+                        margin = notional / LEVERAGE
+                        open_positions[sym] = {
+                            "direction": "LONG" if is_long else "SHORT",
+                            "size": abs(float(pos_size)),
+                            "entry_price": float(entry_px),
+                            "notional_usd": round(notional, 2),
+                            "margin_usd": round(margin, 2),
+                            "pnl_percent": round(float(pnl_pct), 2),
+                        }
+                        total_position_value += margin
+                except Exception:
+                    continue
 
-            # Filter to only valid tokens for this exchange
-            # CRITICAL: Use self.symbols (instance variable) NOT global SYMBOLS
-            # This ensures user-configured symbols from settings are respected
-            valid_tokens = self.symbols
-            buy_recommendations = buy_recommendations[
-                buy_recommendations["token"].isin(valid_tokens)
-            ]
-            if not LONG_ONLY:
-                sell_recommendations = sell_recommendations[
-                    sell_recommendations["token"].isin(valid_tokens)
-                ]
+            # ================================================================
+            # STEP 2: Collect AI Signals
+            # ================================================================
+            signals = []
+            for _, row in self.recommendations_df.iterrows():
+                token = row["token"]
+                if token not in self.symbols:
+                    continue
 
-            # Check if we have any actionable recommendations
-            num_longs = len(buy_recommendations)
-            num_shorts = len(sell_recommendations) if not LONG_ONLY else 0
-            total_positions = num_longs + num_shorts
+                # Skip SELL signals in LONG_ONLY mode (can't open shorts)
+                if LONG_ONLY and row["action"] == "SELL" and token not in open_positions:
+                    continue
 
-            if total_positions == 0:
-                cprint("✅ No actionable recommendations. Skipping allocation.", "green")
-                add_console_log("No actionable signals - skipping allocation", "info")
-                return {}
+                signals.append({
+                    "symbol": token,
+                    "action": row["action"],
+                    "confidence": int(row["confidence"]),
+                })
 
-            cprint(f"📋 Actionable: {num_longs} LONGs, {num_shorts} SHORTs", "cyan")
-            if num_longs > 0:
-                add_console_log(f"Valid LONG tokens: {list(buy_recommendations['token'])}", "info")
-            if num_shorts > 0:
-                add_console_log(f"Valid SHORT tokens: {list(sell_recommendations['token'])}", "info")
+            if not signals:
+                cprint("📊 No actionable signals. Skipping allocation.", "yellow")
+                add_console_log("No actionable signals for allocation", "info")
+                return []
 
-            # Get account balance (equity)
+            # ================================================================
+            # STEP 3: Get Account Balance
+            # ================================================================
             account_balance = get_account_balance(self.account)
             if account_balance <= 0:
                 cprint("❌ Account balance is zero. Cannot allocate.", "red")
-                return None
+                return []
+
+            available_balance = account_balance - total_position_value
+            min_order_notional = 12.0  # HyperLiquid minimum
 
             # ================================================================
-            # 🎯 SMART POSITION SIZING - EQUAL DISTRIBUTION
+            # STEP 4: Build Portfolio State Summary for AI
             # ================================================================
-            cprint(f"\n🎯 SMART SIZING: {total_positions} position(s) to allocate", "yellow", attrs=["bold"])
-            cprint(f"   💵 Account Balance: ${account_balance:.2f}", "white")
-            cprint(f"   📈 Max Position %: {MAX_POSITION_PERCENTAGE}%", "white")
+            if open_positions:
+                portfolio_lines = ["OPEN POSITIONS:"]
+                for sym, pos in open_positions.items():
+                    pnl_emoji = "🟢" if pos["pnl_percent"] >= 0 else "🔴"
+                    portfolio_lines.append(
+                        f"  - {sym}: {pos['direction']} | ${pos['notional_usd']:.2f} notional | "
+                        f"PnL: {pnl_emoji} {pos['pnl_percent']:+.2f}%"
+                    )
+                portfolio_lines.append(f"\nTotal Position Value: ${total_position_value:.2f} margin")
+            else:
+                portfolio_lines = ["OPEN POSITIONS: None"]
 
-            # Calculate total margin available (90% of account)
-            total_available_margin = account_balance * (MAX_POSITION_PERCENTAGE / 100)
+            portfolio_state = "\n".join(portfolio_lines)
 
-            # Calculate cash buffer (10% of account)
-            cash_buffer = account_balance * (CASH_PERCENTAGE / 100)
+            # Build signals summary
+            signal_lines = []
+            for sig in signals:
+                emoji = "📈" if sig["action"] == "BUY" else "📉" if sig["action"] == "SELL" else "⏸️"
+                in_position = "✓ IN POSITION" if sig["symbol"] in open_positions else ""
+                signal_lines.append(
+                    f"  - {sig['symbol']}: {emoji} {sig['action']} ({sig['confidence']}% confidence) {in_position}"
+                )
+            signals_text = "\n".join(signal_lines)
 
-            # Calculate per-position margin (EQUAL distribution)
-            margin_per_position = total_available_margin / total_positions
-
-            # Minimum margin required per position (to meet $12 notional minimum)
-            min_margin_per_position = 12 / LEVERAGE  # e.g., $12 / 20x = $0.60
-
-            cprint(f"\n📊 EQUAL DISTRIBUTION CALCULATION:", "cyan", attrs=["bold"])
-            cprint(f"   💰 Total Available Margin: ${total_available_margin:.2f}", "green")
-            cprint(f"   🔢 Number of Positions: {total_positions} ({num_longs} LONG, {num_shorts} SHORT)", "white")
-            cprint(f"   📏 Margin Per Position: ${margin_per_position:.2f}", "green", attrs=["bold"])
-            cprint(f"   ⚡ Leverage: {LEVERAGE}x", "white")
-            cprint(f"   💎 Notional Per Position: ${margin_per_position * LEVERAGE:.2f}", "cyan", attrs=["bold"])
-            cprint(f"   🛡️ Cash Buffer (10%): ${cash_buffer:.2f}", "yellow")
-
-            # Check if we can meet minimum order size for all positions
-            if margin_per_position < min_margin_per_position:
-                cprint(f"\n⚠️ WARNING: Margin per position (${margin_per_position:.2f}) below minimum (${min_margin_per_position:.2f})", "yellow")
-                cprint(f"   Reducing number of positions to meet minimum order size...", "yellow")
-
-                # Calculate how many positions we can actually support
-                max_supportable_positions = int(total_available_margin / min_margin_per_position)
-
-                if max_supportable_positions < 1:
-                    cprint("❌ Insufficient funds for any position. Need more capital.", "red")
-                    add_console_log("Insufficient funds for positions", "error")
-                    return {}
-
-                # Combine all recommendations and sort by confidence
-                all_recommendations = pd.concat([buy_recommendations, sell_recommendations])
-                all_recommendations = all_recommendations.nlargest(max_supportable_positions, 'confidence')
-
-                # Re-split into LONGs and SHORTs
-                buy_recommendations = all_recommendations[all_recommendations["action"] == "BUY"]
-                sell_recommendations = all_recommendations[all_recommendations["action"] == "SELL"]
-
-                num_longs = len(buy_recommendations)
-                num_shorts = len(sell_recommendations)
-                total_positions = num_longs + num_shorts
-                margin_per_position = total_available_margin / total_positions
-
-                cprint(f"   📉 Reduced to {total_positions} highest-confidence position(s)", "yellow")
-                cprint(f"   📏 New Margin Per Position: ${margin_per_position:.2f}", "green")
-
-            # Build allocation dictionary with direction info
-            allocations = {}
-
-            # Add LONG positions (BUY recommendations)
-            for token in list(buy_recommendations["token"]):
-                amount = round(margin_per_position, 2)
-                if token in open_positions and open_positions[token]["is_long"]:
-                    cprint(f"⏸️ Already LONG {token} — halving new allocation", "yellow")
-                    amount *= 0.5
-                allocations[token] = {
-                    'amount': amount,
-                    'direction': 'LONG'
-                }
-
-            # Add SHORT positions (SELL recommendations)
-            for token in list(sell_recommendations["token"]):
-                amount = round(margin_per_position, 2)
-                if token in open_positions and not open_positions[token]["is_long"]:
-                    cprint(f"⏸️ Already SHORT {token} — halving new allocation", "yellow")
-                    amount *= 0.5
-                allocations[token] = {
-                    'amount': amount,
-                    'direction': 'SHORT'
-                }
-
-            # Add cash buffer (special case - no direction)
-            allocations[USDC_ADDRESS] = {
-                'amount': round(cash_buffer, 2),
-                'direction': 'CASH'
-            }
+            cprint(f"\n📊 Portfolio State:", "cyan")
+            cprint(portfolio_state, "white")
+            cprint(f"\n📈 AI Signals:", "cyan")
+            cprint(signals_text, "white")
+            cprint(f"\n💰 Available Balance: ${available_balance:.2f}", "green")
 
             # ================================================================
-            # 📊 DISPLAY FINAL ALLOCATION
+            # STEP 5: Ask AI for Allocation Plan
             # ================================================================
-            cprint("\n" + "=" * 60, "green")
-            cprint("📊 FINAL SMART ALLOCATION:", "white", "on_green", attrs=["bold"])
-            cprint("=" * 60, "green")
+            cprint("\n🧠 Consulting AI for optimal allocation...", "magenta", attrs=["bold"])
+            add_console_log("🧠 AI analyzing allocation...", "info")
 
-            total_allocated = 0
-            for token, alloc_info in allocations.items():
-                amount = alloc_info['amount']
-                direction = alloc_info['direction']
+            prompt = SMART_ALLOCATION_PROMPT.format(
+                portfolio_state=portfolio_state,
+                signals=signals_text,
+                available_balance=available_balance,
+                leverage=LEVERAGE,
+                max_position_pct=MAX_POSITION_PERCENTAGE,
+                cash_buffer_pct=CASH_PERCENTAGE,
+                min_order=min_order_notional
+            )
 
-                if direction == 'CASH':
-                    cprint(f"   🛡️  USDC (Cash Buffer): ${amount:.2f}", "yellow")
-                elif direction == 'LONG':
-                    notional = amount * LEVERAGE
-                    cprint(f"   📈 {token} (LONG): ${amount:.2f} margin → ${notional:.2f} notional", "green")
-                    total_allocated += amount
-                    add_console_log(f"Allocating LONG {token}: ${amount:.2f} margin (${notional:.2f} notional)", "info")
-                elif direction == 'SHORT':
-                    notional = amount * LEVERAGE
-                    cprint(f"   📉 {token} (SHORT): ${amount:.2f} margin → ${notional:.2f} notional", "red")
-                    total_allocated += amount
-                    add_console_log(f"Allocating SHORT {token}: ${amount:.2f} margin (${notional:.2f} notional)", "info")
+            ai_response = self.chat_with_ai(
+                "You are a portfolio allocation expert. Return ONLY valid JSON.",
+                prompt
+            )
 
-            cprint(f"\n   📈 Total Margin Allocated: ${total_allocated:.2f}", "cyan", attrs=["bold"])
-            cprint(f"   💰 Total Notional Exposure: ${total_allocated * LEVERAGE:.2f}", "cyan", attrs=["bold"])
-            cprint("=" * 60 + "\n", "green")
+            if not ai_response:
+                cprint("❌ No response from AI. Using fallback allocation.", "red")
+                return self._fallback_equal_allocation(signals, available_balance, open_positions)
 
-            return allocations
+            # ================================================================
+            # STEP 6: Parse AI Response
+            # ================================================================
+            try:
+                # Extract JSON from response
+                allocation_plan = extract_json_from_text(ai_response)
+
+                if not allocation_plan or "actions" not in allocation_plan:
+                    cprint("⚠️ AI response missing 'actions'. Using fallback.", "yellow")
+                    return self._fallback_equal_allocation(signals, available_balance, open_positions)
+
+                actions = allocation_plan["actions"]
+
+                # Validate and filter actions
+                valid_actions = []
+                for action in actions:
+                    if not isinstance(action, dict):
+                        continue
+                    if "symbol" not in action or "action" not in action:
+                        continue
+                    if action["symbol"] not in self.symbols:
+                        continue
+
+                    # Skip HOLD actions - nothing to execute
+                    if action["action"] == "HOLD":
+                        cprint(f"   ⏸️ {action['symbol']}: HOLD - {action.get('reason', 'No change needed')}", "cyan")
+                        continue
+
+                    valid_actions.append(action)
+
+                # ================================================================
+                # STEP 7: Display AI Allocation Plan
+                # ================================================================
+                cprint("\n" + "=" * 60, "green")
+                cprint("🎯 AI ALLOCATION PLAN:", "white", "on_green", attrs=["bold"])
+                cprint("=" * 60, "green")
+
+                for action in valid_actions:
+                    action_type = action["action"]
+                    symbol = action["symbol"]
+                    reason = action.get("reason", "")
+
+                    if action_type == "OPEN_LONG":
+                        margin = action.get("margin_usd", 0)
+                        cprint(f"   📈 {symbol}: OPEN LONG ${margin:.2f} margin - {reason}", "green")
+                    elif action_type == "OPEN_SHORT":
+                        margin = action.get("margin_usd", 0)
+                        cprint(f"   📉 {symbol}: OPEN SHORT ${margin:.2f} margin - {reason}", "red")
+                    elif action_type == "INCREASE":
+                        margin = action.get("margin_usd", 0)
+                        cprint(f"   ➕ {symbol}: INCREASE by ${margin:.2f} margin - {reason}", "cyan")
+                    elif action_type == "REDUCE":
+                        reduce_amt = action.get("reduce_by_usd", 0)
+                        cprint(f"   ➖ {symbol}: REDUCE by ${reduce_amt:.2f} notional - {reason}", "yellow")
+                    elif action_type == "CLOSE":
+                        cprint(f"   ❌ {symbol}: CLOSE position - {reason}", "red")
+
+                if allocation_plan.get("reasoning"):
+                    cprint(f"\n   💡 Strategy: {allocation_plan['reasoning']}", "magenta")
+
+                cprint("=" * 60 + "\n", "green")
+                add_console_log(f"AI allocation plan: {len(valid_actions)} actions", "success")
+
+                return valid_actions
+
+            except Exception as e:
+                cprint(f"⚠️ Error parsing AI response: {e}", "yellow")
+                cprint(f"   Response: {ai_response[:200]}...", "white")
+                return self._fallback_equal_allocation(signals, available_balance, open_positions)
 
         except Exception as e:
             cprint(f"❌ Error in portfolio allocation: {str(e)}", "red")
             import traceback
             traceback.print_exc()
-            return None
+            return []
 
-    def execute_allocations(self, allocation_dict):
+    def _fallback_equal_allocation(self, signals, available_balance, open_positions):
         """
-        Execute the allocations for both LONG and SHORT positions.
+        Fallback to equal distribution when AI allocation fails.
+        Returns list of action dicts in the same format as AI.
+        """
+        cprint("\n📊 Using fallback equal distribution...", "yellow")
+
+        actionable_signals = [s for s in signals if s["action"] in ["BUY", "SELL"]]
+        if not actionable_signals:
+            return []
+
+        # Filter out signals where we already have aligned position
+        new_signals = []
+        for sig in actionable_signals:
+            sym = sig["symbol"]
+            if sym in open_positions:
+                pos = open_positions[sym]
+                # If signal aligns with position, skip (already positioned)
+                if (sig["action"] == "BUY" and pos["direction"] == "LONG") or \
+                   (sig["action"] == "SELL" and pos["direction"] == "SHORT"):
+                    continue
+            new_signals.append(sig)
+
+        if not new_signals:
+            cprint("   No new positions to open.", "cyan")
+            return []
+
+        # Calculate margin per position
+        usable_margin = available_balance * (MAX_POSITION_PERCENTAGE / 100)
+        cash_buffer = available_balance * (CASH_PERCENTAGE / 100)
+        margin_per_position = (usable_margin - cash_buffer) / len(new_signals)
+        min_margin = 12 / LEVERAGE
+
+        if margin_per_position < min_margin:
+            # Take only highest confidence signals
+            new_signals.sort(key=lambda x: x["confidence"], reverse=True)
+            max_positions = int((usable_margin - cash_buffer) / min_margin)
+            new_signals = new_signals[:max(1, max_positions)]
+            margin_per_position = (usable_margin - cash_buffer) / len(new_signals)
+
+        actions = []
+        for sig in new_signals:
+            action_type = "OPEN_LONG" if sig["action"] == "BUY" else "OPEN_SHORT"
+            actions.append({
+                "symbol": sig["symbol"],
+                "action": action_type,
+                "margin_usd": round(margin_per_position, 2),
+                "reason": f"Fallback: {sig['action']} signal ({sig['confidence']}% confidence)"
+            })
+
+        return actions
+
+    def execute_allocations(self, actions_list):
+        """
+        Execute the AI-generated allocation plan.
 
         Args:
-            allocation_dict: Dict with format {token: {'amount': margin, 'direction': 'LONG'/'SHORT'/'CASH'}}
+            actions_list: List of action dicts from allocate_portfolio()
+                Each action has: symbol, action, margin_usd/reduce_by_usd, reason
+
+        Action types:
+            - OPEN_LONG: Open new long position
+            - OPEN_SHORT: Open new short position
+            - INCREASE: Add to existing position
+            - REDUCE: Reduce existing position
+            - CLOSE: Close position entirely
         """
+        if not actions_list:
+            cprint("📊 No actions to execute.", "cyan")
+            return
+
         try:
-            print("\n🚀 Executing portfolio allocations...")
-            add_console_log("🚀 Starting portfolio allocations", "info")
+            cprint("\n" + "=" * 60, "yellow")
+            cprint("🚀 EXECUTING AI ALLOCATION PLAN", "white", "on_yellow", attrs=["bold"])
+            cprint("=" * 60, "yellow")
+            add_console_log(f"🚀 Executing {len(actions_list)} allocation actions", "info")
 
-            for token, alloc_info in allocation_dict.items():
-                # Handle new format with direction info
-                if isinstance(alloc_info, dict):
-                    amount = alloc_info.get('amount', 0)
-                    direction = alloc_info.get('direction', 'LONG')
-                else:
-                    amount = alloc_info
-                    direction = 'LONG'
+            # Sort actions: CLOSE first, then REDUCE, then OPEN/INCREASE
+            # This ensures we free up capital before opening new positions
+            action_priority = {"CLOSE": 0, "REDUCE": 1, "OPEN_LONG": 2, "OPEN_SHORT": 2, "INCREASE": 3}
+            sorted_actions = sorted(actions_list, key=lambda x: action_priority.get(x.get("action", ""), 5))
 
-                if direction == 'CASH' or token in EXCLUDED_TOKENS:
-                    print(f"💵 Keeping ${float(amount):.2f} in cash buffer")
+            executed_count = 0
+            failed_count = 0
+
+            for action in sorted_actions:
+                symbol = action.get("symbol")
+                action_type = action.get("action")
+                reason = action.get("reason", "")
+
+                if not symbol or not action_type:
                     continue
 
-                # CRITICAL: Use self.symbols (instance variable) NOT global SYMBOLS
-                # This ensures user-configured symbols from settings are respected
-                if token not in self.symbols:
-                    cprint(f"⚠️ Skipping {token} - not in configured symbols list", "yellow")
-                    add_console_log(f"⚠️ Skipped invalid symbol: {token}", "warning")
+                if symbol not in self.symbols:
+                    cprint(f"⚠️ Skipping {symbol} - not in configured symbols", "yellow")
                     continue
 
-                direction_emoji = "📈" if direction == "LONG" else "📉"
-                print(f"\n🎯 Processing {direction} allocation for {token}...")
-                add_console_log(f"🎯 Processing {direction} {token} allocation: ${amount:.2f}", "info")
+                cprint(f"\n{'─' * 50}", "cyan")
+                cprint(f"🎯 {symbol}: {action_type}", "cyan", attrs=["bold"])
+                if reason:
+                    cprint(f"   📝 {reason}", "white")
 
                 try:
+                    # Get current position state
                     if EXCHANGE == "HYPERLIQUID":
-                        pos_data = n.get_position(token, self.account)
+                        pos_data = n.get_position(symbol, self.account)
                     else:
-                        pos_data = n.get_position(token)
+                        pos_data = n.get_position(symbol)
 
-                    _, im_in_pos, pos_size, _, entry_px, pnl_perc, current_is_long = pos_data
-                    current_position = abs(float(pos_size) * float(entry_px)) if im_in_pos else 0
+                    _, im_in_pos, pos_size, _, entry_px, pnl_pct, is_long = pos_data
+                    current_notional = abs(float(pos_size) * float(entry_px)) if im_in_pos else 0
+                    current_dir = "LONG" if is_long else "SHORT"
 
-                    # --- NEW: partial reallocation / resize logic ------------
-                    target_value = float(amount) * LEVERAGE
-                    if im_in_pos and current_position > 0:
-                        diff = target_value - current_position
-                        if abs(diff) / target_value < 0.15:
-                            print(f"⏸️ {token} within ±15% of target exposure — keeping position size")
-                            continue
-                        elif diff < 0:
-                            print(f"🔄 Reducing {token} exposure by ${abs(diff):.2f}")
-                            try:
-                                n.partial_close(token, abs(diff), account=self.account)
-                                continue
-                            except Exception as e:
-                                cprint(f"⚠️ Partial close failed: {e}", "yellow")
-                    # ----------------------------------------------------------
-
-                    target_allocation = amount
-                    target_is_long = (direction == "LONG")
-
-                    if EXCHANGE in ["HYPERLIQUID", "ASTER"]:
-                        effective_value = float(target_allocation) * LEVERAGE
-                    else:
-                        effective_value = float(target_allocation)
-
-                    print(f"🎯 Target: {direction} ${effective_value:.2f} notional (${target_allocation:.2f} margin)")
-
-                    # Check if we have an existing position
-                    if im_in_pos and pos_size != 0:
-                        current_dir = "LONG" if current_is_long else "SHORT"
-                        print(f"📊 Current: {current_dir} ~${current_position:.2f} notional")
-
-                        # Check if existing position is in SAME or OPPOSITE direction
-                        if current_is_long == target_is_long:
-                            # SAME direction - check if we need to add more
-                            if current_position >= (effective_value * 0.97):
-                                print(f"⏸️ Already have {current_dir} position at target size - skipping")
-                                add_console_log(f"⏸️ {token} {current_dir} already at target", "info")
-                                continue
-                            else:
-                                print(f"📈 Adding to existing {current_dir} position")
-                                # Fall through to open logic
-                        else:
-                            # OPPOSITE direction - this shouldn't happen (handle_exits should have closed it)
-                            cprint(f"⚠️ WARNING: Found {current_dir} position but want to open {direction}", "yellow")
-                            cprint(f"   This position should have been closed in handle_exits()", "yellow")
-                            cprint(f"   Closing it now before opening {direction}...", "yellow")
-
-                            try:
-                                if EXCHANGE == "HYPERLIQUID":
-                                    n.close_complete_position(token, self.account)
-                                else:
-                                    n.chunk_kill(token, max_usd_order_size, slippage)
-
-                                if POSITION_TRACKER_AVAILABLE:
-                                    remove_position(token)
-
-                                cprint(f"✅ Closed {current_dir} position", "green")
-                                time.sleep(1)  # Wait for exchange to process
-                            except Exception as e:
-                                cprint(f"❌ Failed to close opposite position: {e}", "red")
-                                continue
-                    else:
-                        print(f"📊 No existing position")
-
-                    # Open new position
-                    print(f"✨ Executing {direction} entry for {token}")
-                    add_console_log(f"✨ Opening {direction} {token} position", "info")
-
-                    if direction == "LONG":
-                        # ============= LONG POSITION (BUY) =============
-                        if EXCHANGE == "HYPERLIQUID":
-                            cprint(f"🔵 HyperLiquid: ai_entry({token}, ${effective_value:.2f}, leverage={LEVERAGE})", "cyan")
-                            add_console_log(f"🔵 Executing LONG: ai_entry({token}, ${effective_value:.2f}, {LEVERAGE}x)", "info")
-                            n.ai_entry(token, effective_value, leverage=LEVERAGE, account=self.account)
-                        elif EXCHANGE == "ASTER":
-                            cprint(f"🟣 Aster: ai_entry({token}, ${effective_value:.2f}, leverage={LEVERAGE})", "cyan")
-                            add_console_log(f"🟣 Executing LONG: ai_entry({token}, ${effective_value:.2f}, {LEVERAGE}x)", "info")
-                            n.ai_entry(token, effective_value, leverage=LEVERAGE)
-                        else:
-                            cprint(f"🟢 Solana: ai_entry({token}, ${effective_value:.2f})", "cyan")
-                            add_console_log(f"🟢 Executing LONG: ai_entry({token}, ${effective_value:.2f})", "info")
-                            n.ai_entry(token, effective_value)
-
-                        print(f"✅ LONG entry complete for {token}")
-                        add_console_log(f"✅ {token} LONG position opened successfully", "success")
-
-                        # Log position open
-                        try:
-                            log_position_open(token, "LONG", effective_value)
-                        except Exception:
-                            pass
-
-                    elif direction == "SHORT":
-                        # ============= SHORT POSITION (SELL) =============
-                        if EXCHANGE == "HYPERLIQUID":
-                            cprint(f"🔴 HyperLiquid: open_short({token}, ${effective_value:.2f}, leverage={LEVERAGE})", "red")
-                            add_console_log(f"🔴 Executing SHORT: open_short({token}, ${effective_value:.2f}, {LEVERAGE}x)", "info")
-                            n.open_short(token, effective_value, leverage=LEVERAGE, account=self.account)
-                        elif EXCHANGE == "ASTER":
-                            cprint(f"🟣 Aster: open_short({token}, ${effective_value:.2f}, leverage={LEVERAGE})", "red")
-                            add_console_log(f"🟣 Executing SHORT: open_short({token}, ${effective_value:.2f}, {LEVERAGE}x)", "info")
-                            # Aster may use different function - fallback to ai_entry with sell flag if available
-                            if hasattr(n, 'open_short'):
-                                n.open_short(token, effective_value, leverage=LEVERAGE)
-                            else:
-                                cprint(f"⚠️ open_short not available for ASTER, skipping", "yellow")
-                                continue
-                        else:
-                            cprint(f"⚠️ SHORT positions not supported on SOLANA exchange", "yellow")
-                            add_console_log(f"⚠️ SHORT not supported on SOLANA", "warning")
+                    # ============================================================
+                    # CLOSE: Close entire position
+                    # ============================================================
+                    if action_type == "CLOSE":
+                        if not im_in_pos or pos_size == 0:
+                            cprint(f"   ℹ️ No position to close", "cyan")
                             continue
 
-                        print(f"✅ SHORT entry complete for {token}")
-                        add_console_log(f"✅ {token} SHORT position opened successfully", "success")
+                        cprint(f"   📊 Closing {current_dir} position (${current_notional:.2f} notional)", "yellow")
 
-                        # Log position open
-                        try:
-                            log_position_open(token, "SHORT", effective_value)
-                        except Exception:
-                            pass
+                        if EXCHANGE == "HYPERLIQUID":
+                            n.close_complete_position(symbol, self.account)
+                        else:
+                            n.chunk_kill(symbol, max_usd_order_size, slippage)
 
-                    # Record position entry in tracker for age-based decisions
-                    if POSITION_TRACKER_AVAILABLE:
-                        try:
-                            entry_price = 0.0
+                        if POSITION_TRACKER_AVAILABLE:
+                            remove_position(symbol)
+
+                        cprint(f"   ✅ Position closed!", "green")
+                        add_console_log(f"✅ Closed {symbol} {current_dir}", "success")
+                        executed_count += 1
+
+                    # ============================================================
+                    # REDUCE: Reduce position size
+                    # ============================================================
+                    elif action_type == "REDUCE":
+                        reduce_amount = action.get("reduce_by_usd", 0)
+
+                        if not im_in_pos or pos_size == 0:
+                            cprint(f"   ℹ️ No position to reduce", "cyan")
+                            continue
+
+                        if reduce_amount <= 0:
+                            cprint(f"   ⚠️ Invalid reduce amount", "yellow")
+                            continue
+
+                        cprint(f"   📊 Current: ${current_notional:.2f} notional", "white")
+                        cprint(f"   ➖ Reducing by: ${reduce_amount:.2f} notional", "yellow")
+
+                        if hasattr(n, 'partial_close'):
+                            n.partial_close(symbol, reduce_amount, account=self.account)
+                            cprint(f"   ✅ Position reduced!", "green")
+                            add_console_log(f"✅ Reduced {symbol} by ${reduce_amount:.2f}", "success")
+                            executed_count += 1
+                        else:
+                            cprint(f"   ⚠️ partial_close not available", "yellow")
+
+                    # ============================================================
+                    # OPEN_LONG / INCREASE (for LONG)
+                    # ============================================================
+                    elif action_type in ["OPEN_LONG", "INCREASE"] and (action_type == "OPEN_LONG" or (im_in_pos and is_long)):
+                        margin_usd = action.get("margin_usd", 0)
+                        if margin_usd <= 0:
+                            cprint(f"   ⚠️ Invalid margin amount", "yellow")
+                            continue
+
+                        notional = margin_usd * LEVERAGE
+
+                        # Check if we need to close opposite position first
+                        if im_in_pos and not is_long:
+                            cprint(f"   ⚠️ Closing SHORT before opening LONG...", "yellow")
+                            if EXCHANGE == "HYPERLIQUID":
+                                n.close_complete_position(symbol, self.account)
+                            else:
+                                n.chunk_kill(symbol, max_usd_order_size, slippage)
+                            time.sleep(1)
+
+                        cprint(f"   📈 Opening LONG: ${notional:.2f} notional (${margin_usd:.2f} margin)", "green")
+
+                        if EXCHANGE == "HYPERLIQUID":
+                            n.ai_entry(symbol, notional, leverage=LEVERAGE, account=self.account)
+                        elif EXCHANGE == "ASTER":
+                            n.ai_entry(symbol, notional, leverage=LEVERAGE)
+                        else:
+                            n.ai_entry(symbol, notional)
+
+                        cprint(f"   ✅ LONG position opened!", "green")
+                        add_console_log(f"✅ Opened LONG {symbol} ${notional:.2f}", "success")
+
+                        # Record in tracker
+                        if POSITION_TRACKER_AVAILABLE:
                             try:
-                                raw_pos = n.get_position(token, self.account) if EXCHANGE == "HYPERLIQUID" else n.get_position(token)
-                                if raw_pos and len(raw_pos) > 4:
-                                    entry_price = raw_pos[4]
+                                record_position_entry(symbol=symbol, entry_price=0, size=notional, is_long=True)
                             except Exception:
                                 pass
 
-                            record_position_entry(
-                                symbol=token,
-                                entry_price=entry_price,
-                                size=effective_value,
-                                is_long=(direction == "LONG")
-                            )
-                            cprint(f"   📝 Recorded {token} {direction} in position tracker", "cyan")
-                        except Exception as e:
-                            cprint(f"   ⚠️ Failed to record position: {e}", "yellow")
+                        try:
+                            log_position_open(symbol, "LONG", notional)
+                        except Exception:
+                            pass
+
+                        executed_count += 1
+
+                    # ============================================================
+                    # OPEN_SHORT / INCREASE (for SHORT)
+                    # ============================================================
+                    elif action_type in ["OPEN_SHORT"] or (action_type == "INCREASE" and im_in_pos and not is_long):
+                        margin_usd = action.get("margin_usd", 0)
+                        if margin_usd <= 0:
+                            cprint(f"   ⚠️ Invalid margin amount", "yellow")
+                            continue
+
+                        notional = margin_usd * LEVERAGE
+
+                        # Check if we need to close opposite position first
+                        if im_in_pos and is_long:
+                            cprint(f"   ⚠️ Closing LONG before opening SHORT...", "yellow")
+                            if EXCHANGE == "HYPERLIQUID":
+                                n.close_complete_position(symbol, self.account)
+                            else:
+                                n.chunk_kill(symbol, max_usd_order_size, slippage)
+                            time.sleep(1)
+
+                        if EXCHANGE == "SOLANA":
+                            cprint(f"   ⚠️ SHORT not supported on SOLANA", "yellow")
+                            continue
+
+                        cprint(f"   📉 Opening SHORT: ${notional:.2f} notional (${margin_usd:.2f} margin)", "red")
+
+                        if EXCHANGE == "HYPERLIQUID":
+                            n.open_short(symbol, notional, leverage=LEVERAGE, account=self.account)
+                        elif EXCHANGE == "ASTER":
+                            if hasattr(n, 'open_short'):
+                                n.open_short(symbol, notional, leverage=LEVERAGE)
+                            else:
+                                cprint(f"   ⚠️ open_short not available for ASTER", "yellow")
+                                continue
+
+                        cprint(f"   ✅ SHORT position opened!", "green")
+                        add_console_log(f"✅ Opened SHORT {symbol} ${notional:.2f}", "success")
+
+                        # Record in tracker
+                        if POSITION_TRACKER_AVAILABLE:
+                            try:
+                                record_position_entry(symbol=symbol, entry_price=0, size=notional, is_long=False)
+                            except Exception:
+                                pass
+
+                        try:
+                            log_position_open(symbol, "SHORT", notional)
+                        except Exception:
+                            pass
+
+                        executed_count += 1
+
+                    else:
+                        cprint(f"   ⚠️ Unknown action type: {action_type}", "yellow")
 
                 except Exception as e:
-                    error_msg = f"❌ Error executing {direction} entry for {token}: {str(e)}"
-                    print(error_msg)
-                    add_console_log(error_msg, "error")
+                    cprint(f"   ❌ Error: {str(e)}", "red")
+                    add_console_log(f"❌ {symbol} {action_type} failed: {e}", "error")
+                    failed_count += 1
                     import traceback
                     traceback.print_exc()
 
-                time.sleep(2)
+                time.sleep(2)  # Rate limiting between trades
+
+            # Summary
+            cprint(f"\n{'=' * 60}", "green")
+            cprint(f"✅ EXECUTION COMPLETE: {executed_count} succeeded, {failed_count} failed", "green", attrs=["bold"])
+            cprint(f"{'=' * 60}\n", "green")
+            add_console_log(f"Execution complete: {executed_count} succeeded, {failed_count} failed", "success")
 
         except Exception as e:
             cprint(f"❌ Error in execute_allocations: {e}", "red")
@@ -2364,101 +2499,51 @@ Return ONLY valid JSON with the following structure:
                 return
 
             # ================================================================
-            # 🚀 EXECUTION AFTER ALL ANALYSIS
+            # 🚀 UNIFIED EXECUTION - AI-DRIVEN ALLOCATION
+            # Works the same for both swarm and single mode
             # ================================================================
-            if self.use_swarm_mode:
-                try:
-                    cprint("\n♾️ SWARM MODE ACTIVE — executing unified pipeline after all analyses...", "cyan", attrs=["bold"])
-                    add_console_log("♾️ Swarm — allocation starting", "info")
+            try:
+                mode_name = "SWARM" if self.use_swarm_mode else "SINGLE"
+                cprint(f"\n{'=' * 80}", "yellow")
+                cprint(f"🚀 {mode_name} MODE — AI-Driven Allocation Pipeline", "white", "on_yellow", attrs=["bold"])
+                cprint(f"{'=' * 80}", "yellow")
+                add_console_log(f"🚀 {mode_name} mode — starting allocation pipeline", "info")
 
-                    # Phase 1: Close contradictory positions
-                    self.handle_exits()
-
-                    # Phase 2: Smart allocation
-                    allocations = self.allocate_portfolio()
-
-                    # Phase 3: Execute trades if valid
-                    if allocations and isinstance(allocations, dict) and len(allocations) > 0:
-                        self.execute_allocations(allocations)
-                        cprint("✅ Swarm unified execution complete!", "green", attrs=["bold"])
-                        add_console_log("✅ Execution complete", "success")
-                    else:
-                        cprint("ℹ️ No actionable allocations generated by swarm.", "yellow")
-                        add_console_log("ℹ️ No actionable allocations to execute", "info")
-
-                except Exception as swarm_err:
-                    cprint(f"❌ Swarm unified execution failed: {swarm_err}", "red")
-                    import traceback
-                    traceback.print_exc()
-                    add_console_log(f"Swarm unified execution error: {swarm_err}", "error")
-
-            else:
-                # ================================================================
-                # ORDER OF OPERATIONS (per dev_tasks.md 3.1):
-                # PHASE 1: CLOSE existing positions
-                # PHASE 2: RE-EVALUATE allocation (refresh balance)
-                # PHASE 3: OPEN new positions
-                # ================================================================
-                cprint("\n" + "=" * 80, "yellow")
-                cprint("🔄 PHASE 1: CLOSE EXISTING POSITIONS", "yellow", attrs=["bold"])
-                cprint("=" * 80, "yellow")
+                # Phase 1: Close contradictory positions (signals vs positions)
+                cprint("\n📌 PHASE 1: Exit Contradictory Positions", "yellow", attrs=["bold"])
                 self.handle_exits()
 
                 if self.should_stop():
-                    add_console_log("ℹ️ Stop signal received - skipping portfolio allocation", "warning")
+                    add_console_log("ℹ️ Stop signal received - skipping allocation", "warning")
                     return
 
-                cprint("\n" + "=" * 80, "cyan")
-                cprint("🔄 PHASE 2: RE-EVALUATE ALLOCATION", "cyan", attrs=["bold"])
-                cprint("=" * 80, "cyan")
-
-                cprint("⏳ Waiting for exchange to process closures...", "cyan")
+                # Wait for exchange to process closes
+                cprint("⏳ Waiting for exchange to process...", "cyan")
                 time.sleep(3)
 
-                try:
-                    fresh_balance = get_account_balance(self.account)
-                    cprint(f"💰 Fresh Account Balance: ${fresh_balance:,.2f}", "green", attrs=["bold"])
-                    add_console_log(f"Phase 2: Fresh balance = ${fresh_balance:,.2f}", "info")
-                except Exception as e:
-                    cprint(f"⚠️ Could not refresh balance: {e}", "yellow")
-                    fresh_balance = 0
-
-                open_positions = self.fetch_all_open_positions()
-                total_open = sum(len(positions) for positions in open_positions.values())
-                cprint(f"📊 Remaining open positions: {total_open}", "cyan")
+                # Phase 2: AI-Driven Smart Allocation
+                cprint("\n📌 PHASE 2: AI Smart Allocation", "cyan", attrs=["bold"])
+                allocation_actions = self.allocate_portfolio()
 
                 if self.should_stop():
-                    add_console_log("ℹ️ Stop signal received - skipping new position opening", "warning")
+                    add_console_log("ℹ️ Stop signal received - skipping execution", "warning")
                     return
 
-                cprint("\n" + "=" * 80, "green")
-                cprint("🔄 PHASE 3: OPEN NEW POSITIONS", "green", attrs=["bold"])
-                cprint("=" * 80, "green")
-
-                buy_recommendations = self.recommendations_df[self.recommendations_df["action"] == "BUY"]
-                sell_recommendations = self.recommendations_df[self.recommendations_df["action"] == "SELL"]
-
-                actionable_count = len(buy_recommendations)
-                if not LONG_ONLY:
-                    actionable_count += len(sell_recommendations)
-
-                if USE_PORTFOLIO_ALLOCATION and actionable_count > 0:
-                    cprint(f"📊 Found {len(buy_recommendations)} BUY recommendations", "green")
-                    if not LONG_ONLY:
-                        cprint(f"📉 Found {len(sell_recommendations)} SELL recommendations (potential shorts)", "yellow")
-
-                    allocation = self.allocate_portfolio()
-                    if allocation:
-                        if self.should_stop():
-                            add_console_log("ℹ️ Stop signal received - skipping allocations", "warning")
-                            return
-
-                        cprint("\n💼 Executing portfolio allocations with fresh balance...", "white", "on_blue")
-                        add_console_log("💼 Phase 3: Executing portfolio allocations", "info")
-                        self.execute_allocations(allocation)
+                # Phase 3: Execute the AI allocation plan
+                if allocation_actions and isinstance(allocation_actions, list) and len(allocation_actions) > 0:
+                    cprint(f"\n📌 PHASE 3: Execute {len(allocation_actions)} Actions", "green", attrs=["bold"])
+                    self.execute_allocations(allocation_actions)
+                    cprint(f"\n✅ {mode_name} mode execution complete!", "green", attrs=["bold"])
+                    add_console_log(f"✅ {mode_name} execution complete", "success")
                 else:
-                    cprint("📊 No actionable recommendations - skipping allocation", "cyan")
-                    add_console_log("Phase 3: No actionable recommendations", "info")
+                    cprint("\nℹ️ No allocation actions to execute.", "yellow")
+                    add_console_log("ℹ️ No allocation actions generated", "info")
+
+            except Exception as exec_err:
+                cprint(f"❌ Execution pipeline failed: {exec_err}", "red")
+                import traceback
+                traceback.print_exc()
+                add_console_log(f"Execution error: {exec_err}", "error")
 
             # STEP 8: FINAL PORTFOLIO REPORT
             self.show_final_portfolio_report()
