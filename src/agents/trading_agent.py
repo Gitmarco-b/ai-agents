@@ -1918,10 +1918,22 @@ Return ONLY valid JSON with the following structure:
             print("🔧 Check the logs and try again!")
 
     def handle_exits(self):
-        """Check and exit positions based on SELL recommendations"""
-        import inspect
+        """
+        PHASE 1: CLOSE existing positions based on SELL recommendations.
 
-        cprint("\n🔄 Checking for positions to exit...", "white", "on_blue")
+        This function ONLY handles EXITS - it does NOT open new positions.
+        New positions are opened in execute_allocations() after balance is recalculated.
+
+        Order of Operations (per dev_tasks.md 3.1):
+        1. CLOSE existing positions (this function)
+        2. RE-EVALUATE allocation (allocate_portfolio with fresh balance)
+        3. OPEN new positions (execute_allocations)
+        """
+        cprint("\n🔄 PHASE 1: Checking for positions to exit...", "white", "on_blue")
+        add_console_log("🔄 Phase 1: Closing positions with SELL signals", "info")
+
+        positions_closed = 0
+        positions_held = 0
 
         for _, row in self.recommendations_df.iterrows():
             token = row["token"]
@@ -1953,7 +1965,8 @@ Return ONLY valid JSON with the following structure:
                         else:
                             n.chunk_kill(token, max_usd_order_size, slippage)
                         cprint("✅ Position closed successfully!", "white", "on_green")
-                        add_console_log(f"Closed {token} position due to signal", "warning")
+                        add_console_log(f"Closed {token} position due to SELL signal", "warning")
+                        positions_closed += 1
 
                     except Exception as e:
                         cprint(f"❌ Error closing position: {str(e)}", "white", "on_red")
@@ -1961,118 +1974,38 @@ Return ONLY valid JSON with the following structure:
                 elif action == "NOTHING":
                     cprint("⏸️  DO NOTHING signal - HOLDING POSITION", "white", "on_blue")
                     cprint(f"💎 Maintaining ${current_position:.2f} position", "cyan")
+                    positions_held += 1
 
                 else:
                     cprint("✅ BUY signal - KEEPING POSITION", "white", "on_green")
                     cprint(f"💎 Maintaining ${current_position:.2f} position", "cyan")
+                    positions_held += 1
 
             else:
                 # ============= CASE: NO POSITION =============
+                # Do NOT open new positions here - that happens in execute_allocations()
                 if action == "SELL":
                     if LONG_ONLY:
                         cprint("⏭️  SELL signal but NO POSITION to close", "white", "on_blue")
-                        cprint("📊 LONG ONLY mode: Can't open short, doing nothing", "cyan")
+                        cprint("📊 LONG ONLY mode: Can't open short", "cyan")
                     else:
-                        account_balance = get_account_balance(self.account)
-                        position_size = calculate_position_size(account_balance)
-
-                        cprint("📉 SELL signal with no position - OPENING SHORT", "white", "on_red")
-                        cprint(f"⚡ {EXCHANGE} mode: Opening ${position_size:,.2f} short position", "yellow")
-
-                        try:
-                            # Dynamically detect which function to use
-                            if hasattr(n, "open_short"):
-                                fn = n.open_short
-                                cprint(f"📉 Executing open_short (${position_size:,.2f})...", "yellow")
-                            else:
-                                fn = n.market_sell
-                                cprint(f"📉 Executing market_sell (${position_size:,.2f})...", "yellow")
-
-                            # Build kwargs dynamically depending on function signature
-                            params = inspect.signature(fn).parameters
-                            kwargs = {}
-                            if "leverage" in params:
-                                kwargs["leverage"] = LEVERAGE
-                            if "account" in params:
-                                kwargs["account"] = self.account
-                            if "slippage" in params:
-                                kwargs["slippage"] = slippage
-
-                            # Safe function call
-                            fn(token, position_size, **kwargs)
-
-                            cprint("✅ Short position opened successfully!", "white", "on_green")
-                            add_console_log(f"📉 Opened new {token} SHORT position", "success")
-
-                            # Log short position open (using shared logging utility)
-                            try:
-                                log_position_open(token, "SHORT", position_size)
-                            except Exception:
-                                pass
-
-                        except Exception as e:
-                            cprint(f"❌ Error opening short position: {str(e)}", "white", "on_red")
+                        cprint("📉 SELL signal with no position - SHORT will be opened in allocation phase", "white", "on_yellow")
+                        cprint("📊 Deferring to portfolio allocation for proper sizing", "cyan")
 
                 elif action == "NOTHING":
                     cprint("⏸️  DO NOTHING signal with no position", "white", "on_blue")
                     cprint("⏭️  Staying out of market", "cyan")
 
                 else:
-                    # BUY signal with no position
-                    cprint("📈 BUY signal with no position", "white", "on_green")
+                    # BUY signal with no position - defer to allocation phase
+                    cprint("📈 BUY signal with no position - will be opened in allocation phase", "white", "on_green")
+                    cprint("📊 Deferring to portfolio allocation for proper sizing", "cyan")
 
-                    if USE_PORTFOLIO_ALLOCATION:
-                        cprint("📊 Portfolio allocation will handle entry", "white", "on_cyan")
-                    else:
-                        account_balance = get_account_balance(self.account)
-                        position_size = calculate_position_size(account_balance)
-
-                        cprint("💰 Opening position at MAX_POSITION_PERCENTAGE", "white", "on_green")
-
-                        try:
-                            if EXCHANGE in ["ASTER", "HYPERLIQUID"]:
-                                if EXCHANGE == "HYPERLIQUID":
-                                    success = n.ai_entry(token, position_size, leverage=LEVERAGE, account=self.account)
-                                else:
-                                    success = n.ai_entry(token, position_size, leverage=LEVERAGE)
-                            else:
-                                success = n.ai_entry(token, position_size)
-
-                            if success:
-                                cprint("✅ LONG Position opened successfully!", "white", "on_green")
-                                add_console_log(f"📈 Opened new {token} LONG position", "success")
-
-                                time.sleep(2)
-
-                                # Verify position
-                                try:
-                                    if EXCHANGE == "HYPERLIQUID":
-                                        raw_pos_data = n.get_position(token, self.account)
-                                    else:
-                                        raw_pos_data = n.get_position(token)
-
-                                    _, im_in_pos, pos_size, _, _, _, _ = raw_pos_data
-
-                                    if im_in_pos and pos_size != 0:
-                                        cprint(f"📊 Confirmed: Position Active (Size: {pos_size})", "green", attrs=["bold"])
-                                        
-                                        # Log position open (using shared logging utility)
-                                        try:
-                                            notional_value = float(position_size) * LEVERAGE
-                                            log_position_open(token, "LONG", notional_value)
-                                        except Exception:
-                                            pass
-                                    else:
-                                        cprint("⚠️  Warning: Position verification failed - no position found!", "yellow")
-
-                                except Exception as e:
-                                    cprint(f"⚠️  Verification check error: {e}", "yellow")
-
-                            else:
-                                cprint("❌ Position not opened (check errors above)", "white", "on_red")
-                                
-                        except Exception as e:
-                            cprint(f"❌ Error opening position: {str(e)}", "white", "on_red")
+        # Summary
+        cprint(f"\n{'=' * 60}", "green")
+        cprint(f"✅ PHASE 1 COMPLETE: Closed {positions_closed}, Held {positions_held} positions", "green", attrs=["bold"])
+        cprint(f"{'=' * 60}", "green")
+        add_console_log(f"Phase 1 complete: Closed {positions_closed}, Held {positions_held}", "success")
 
     def show_final_portfolio_report(self):
         """Display final portfolio status - NO LOOPS, just a snapshot"""
@@ -2243,7 +2176,17 @@ Return ONLY valid JSON with the following structure:
                 add_console_log("⏹️ Stop signal received - skipping trade execution", "warning")
                 return
 
-            # STEP 7: HANDLE EXITS & ENTRIES
+            # ================================================================
+            # ORDER OF OPERATIONS (per dev_tasks.md 3.1):
+            # PHASE 1: CLOSE existing positions
+            # PHASE 2: RE-EVALUATE allocation (refresh balance)
+            # PHASE 3: OPEN new positions
+            # ================================================================
+
+            # PHASE 1: CLOSE - Exit positions based on SELL recommendations
+            cprint("\n" + "=" * 80, "yellow")
+            cprint("🔄 PHASE 1: CLOSE EXISTING POSITIONS", "yellow", attrs=["bold"])
+            cprint("=" * 80, "yellow")
             self.handle_exits()
 
             # Check for stop signal
@@ -2251,9 +2194,53 @@ Return ONLY valid JSON with the following structure:
                 add_console_log("⏹️ Stop signal received - skipping portfolio allocation", "warning")
                 return
 
-            buy_recommendations = self.recommendations_df[self.recommendations_df["action"] == "BUY"]
+            # PHASE 2: RE-EVALUATE - Refresh balance and verify closures
+            cprint("\n" + "=" * 80, "cyan")
+            cprint("🔄 PHASE 2: RE-EVALUATE ALLOCATION", "cyan", attrs=["bold"])
+            cprint("=" * 80, "cyan")
 
-            if USE_PORTFOLIO_ALLOCATION and len(buy_recommendations) > 0:
+            # Wait for exchange to update after closures
+            cprint("⏳ Waiting for exchange to process closures...", "cyan")
+            time.sleep(3)
+
+            # Refresh account balance AFTER closures
+            try:
+                fresh_balance = get_account_balance(self.account)
+                cprint(f"💰 Fresh Account Balance: ${fresh_balance:,.2f}", "green", attrs=["bold"])
+                add_console_log(f"Phase 2: Fresh balance = ${fresh_balance:,.2f}", "info")
+            except Exception as e:
+                cprint(f"⚠️ Could not refresh balance: {e}", "yellow")
+                fresh_balance = 0
+
+            # Verify positions are actually closed
+            open_positions = self.fetch_all_open_positions()
+            total_open = sum(len(positions) for positions in open_positions.values())
+            cprint(f"📊 Remaining open positions: {total_open}", "cyan")
+
+            # Check for stop signal
+            if self.should_stop():
+                add_console_log("⏹️ Stop signal received - skipping new position opening", "warning")
+                return
+
+            # PHASE 3: OPEN - Open new positions with fresh balance
+            cprint("\n" + "=" * 80, "green")
+            cprint("🔄 PHASE 3: OPEN NEW POSITIONS", "green", attrs=["bold"])
+            cprint("=" * 80, "green")
+
+            buy_recommendations = self.recommendations_df[self.recommendations_df["action"] == "BUY"]
+            sell_recommendations = self.recommendations_df[self.recommendations_df["action"] == "SELL"]
+
+            # Count actionable recommendations (for new positions)
+            actionable_count = len(buy_recommendations)
+            if not LONG_ONLY:
+                # Also count SELL recommendations for SHORT positions (when no existing position)
+                actionable_count += len(sell_recommendations)
+
+            if USE_PORTFOLIO_ALLOCATION and actionable_count > 0:
+                cprint(f"📊 Found {len(buy_recommendations)} BUY recommendations", "green")
+                if not LONG_ONLY:
+                    cprint(f"📉 Found {len(sell_recommendations)} SELL recommendations (potential shorts)", "yellow")
+
                 allocation = self.allocate_portfolio()
                 if allocation:
                     # Check for stop signal before executing allocations
@@ -2261,9 +2248,12 @@ Return ONLY valid JSON with the following structure:
                         add_console_log("⏹️ Stop signal received - skipping allocations", "warning")
                         return
 
-                    cprint("\n💼 Executing portfolio allocations...", "white", "on_blue")
-                    add_console_log("💼 Executing portfolio allocations...", "info")
+                    cprint("\n💼 Executing portfolio allocations with fresh balance...", "white", "on_blue")
+                    add_console_log("💼 Phase 3: Executing portfolio allocations", "info")
                     self.execute_allocations(allocation)
+            else:
+                cprint("📊 No actionable recommendations - skipping allocation", "cyan")
+                add_console_log("Phase 3: No actionable recommendations", "info")
 
             # STEP 8: FINAL PORTFOLIO REPORT
             self.show_final_portfolio_report()
