@@ -10,8 +10,10 @@ DATA SOURCE ARCHITECTURE:
 | Current Price    | WebSocket | Real-time updates, no polling       |
 | Bid/Ask          | WebSocket | Real-time order book                |
 | L2 Order Book    | WebSocket | Real-time depth, 100ms updates      |
+| Positions        | WebSocket | Real-time position updates          |
+| Fills/Orders     | WebSocket | Real-time trade notifications       |
+| Account State    | WebSocket | Real-time balance/equity updates    |
 | OHLC/Candles     | API       | Historical data, batch fetching     |
-| User State       | API       | Account data, positions             |
 | Funding Rates    | API       | Periodic data, not real-time        |
 
 This module provides drop-in replacement functions that:
@@ -63,6 +65,7 @@ class WebSocketDataManager:
         """
         self._price_feed = None
         self._orderbook_feed = None
+        self._user_state_feed = None
         self._ws_client = None
         self._is_initialized = False
         self._lock = threading.Lock()
@@ -101,6 +104,7 @@ class WebSocketDataManager:
                 from src.websocket.hyperliquid_ws import HyperliquidWebSocket
                 from src.websocket.price_feed import PriceFeed
                 from src.websocket.orderbook_feed import OrderBookFeed
+                from src.websocket.user_state_feed import UserStateFeed
 
                 # Create shared WebSocket client
                 self._ws_client = HyperliquidWebSocket(auto_reconnect=True)
@@ -132,9 +136,13 @@ class WebSocketDataManager:
                 self._orderbook_feed = OrderBookFeed(ws_client=self._ws_client)
                 self._orderbook_feed.start(coins)
 
+                # Create user state feed with shared WebSocket
+                self._user_state_feed = UserStateFeed(ws_client=self._ws_client)
+                self._user_state_feed.start()
+
                 self._is_initialized = True
                 cprint("WebSocket data manager started", "green")
-                logger.info(f"Data manager initialized for {len(coins)} coins")
+                logger.info(f"Data manager initialized for {len(coins)} coins + user state")
                 return True
 
             except Exception as e:
@@ -149,6 +157,8 @@ class WebSocketDataManager:
                 self._price_feed.stop()
             if self._orderbook_feed:
                 self._orderbook_feed.stop()
+            if self._user_state_feed:
+                self._user_state_feed.stop()
             if self._ws_client:
                 self._ws_client.close()
             self._is_initialized = False
@@ -302,7 +312,9 @@ class WebSocketDataManager:
 
     def get_position(self, symbol: str, account=None) -> tuple:
         """
-        Get current position for a symbol (always uses API)
+        Get current position for a symbol
+
+        Uses WebSocket data if available and fresh, falls back to API.
 
         Args:
             symbol: Trading pair symbol
@@ -311,47 +323,134 @@ class WebSocketDataManager:
         Returns:
             Tuple: (positions, im_in_pos, pos_size, pos_sym, entry_px, pnl_perc, is_long)
         """
-        from src.nice_funcs_hyperliquid import get_position
-        return get_position(symbol, account)
+        # Try WebSocket first
+        if self._is_initialized and self._user_state_feed:
+            pos = self._user_state_feed.get_position(symbol)
+            if pos and not self._user_state_feed.is_position_stale(symbol, 30.0):
+                # Convert to API format
+                return (
+                    [pos.to_dict()],  # positions list
+                    True,  # im_in_pos
+                    pos.size,  # pos_size
+                    pos.coin,  # pos_sym
+                    pos.entry_price,  # entry_px
+                    pos.pnl_percent,  # pnl_perc
+                    pos.is_long  # is_long
+                )
+            elif not self._user_state_feed.has_position(symbol):
+                # No position - return empty
+                return ([], False, 0, symbol, 0, 0, True)
 
-    def get_account_value(self, address) -> float:
+        # Fall back to API
+        if self._fallback_to_api:
+            from src.nice_funcs_hyperliquid import get_position as hl_get_position
+            return hl_get_position(symbol, account)
+
+        return ([], False, 0, symbol, 0, 0, True)
+
+    def get_account_value(self, address=None) -> float:
         """
-        Get total account value (always uses API)
+        Get total account value
+
+        Uses WebSocket data if available, falls back to API.
 
         Args:
-            address: Wallet address or Account object
+            address: Wallet address or Account object (optional if using WebSocket)
 
         Returns:
             Total account value in USD
         """
-        from src.nice_funcs_hyperliquid import get_account_value
-        return get_account_value(address)
+        # Try WebSocket first
+        if self._is_initialized and self._user_state_feed:
+            account_state = self._user_state_feed.get_account_state()
+            if account_state.account_value > 0:
+                return account_state.account_value
 
-    def get_balance(self, address) -> float:
+        # Fall back to API
+        if self._fallback_to_api and address:
+            from src.nice_funcs_hyperliquid import get_account_value as hl_get_account_value
+            return hl_get_account_value(address)
+
+        return 0.0
+
+    def get_balance(self, address=None) -> float:
         """
-        Get available balance (always uses API)
+        Get available balance
+
+        Uses WebSocket data if available, falls back to API.
 
         Args:
-            address: Wallet address or Account object
+            address: Wallet address or Account object (optional if using WebSocket)
 
         Returns:
             Available balance in USD
         """
-        from src.nice_funcs_hyperliquid import get_balance
-        return get_balance(address)
+        # Try WebSocket first
+        if self._is_initialized and self._user_state_feed:
+            account_state = self._user_state_feed.get_account_state()
+            if account_state.withdrawable > 0:
+                return account_state.withdrawable
 
-    def get_all_positions(self, address) -> list:
+        # Fall back to API
+        if self._fallback_to_api and address:
+            from src.nice_funcs_hyperliquid import get_balance as hl_get_balance
+            return hl_get_balance(address)
+
+        return 0.0
+
+    def get_all_positions(self, address=None) -> list:
         """
-        Get all open positions (always uses API)
+        Get all open positions
+
+        Uses WebSocket data if available, falls back to API.
 
         Args:
-            address: Wallet address or Account object
+            address: Wallet address or Account object (optional if using WebSocket)
 
         Returns:
             List of position dictionaries
         """
-        from src.nice_funcs_hyperliquid import get_all_positions
-        return get_all_positions(address)
+        # Try WebSocket first
+        if self._is_initialized and self._user_state_feed:
+            positions = self._user_state_feed.get_positions_list()
+            if positions or self._user_state_feed._initial_state_loaded:
+                return positions
+
+        # Fall back to API
+        if self._fallback_to_api and address:
+            from src.nice_funcs_hyperliquid import get_all_positions as hl_get_all_positions
+            return hl_get_all_positions(address)
+
+        return []
+
+    def get_recent_fills(self, limit: int = 10) -> list:
+        """
+        Get recent trade fills from WebSocket
+
+        Args:
+            limit: Maximum number of fills to return
+
+        Returns:
+            List of fill dictionaries
+        """
+        if self._is_initialized and self._user_state_feed:
+            return self._user_state_feed.get_recent_fills(limit)
+        return []
+
+    def add_position_listener(self, callback) -> None:
+        """Add a callback for real-time position updates"""
+        if self._user_state_feed:
+            self._user_state_feed.add_position_listener(callback)
+
+    def add_fill_listener(self, callback) -> None:
+        """Add a callback for real-time fill notifications"""
+        if self._user_state_feed:
+            self._user_state_feed.add_fill_listener(callback)
+
+    def add_account_listener(self, callback) -> None:
+        """Add a callback for real-time account updates"""
+        if self._user_state_feed:
+            self._user_state_feed.add_account_listener(callback)
 
     # ========================================================================
     # API FALLBACK METHODS
@@ -571,7 +670,9 @@ def get_funding_rates(symbol: str) -> Optional[Dict]:
 
 def get_position(symbol: str, account=None) -> tuple:
     """
-    Get current position for a symbol (always uses API)
+    Get current position for a symbol
+
+    Uses WebSocket data if available, falls back to API.
 
     Args:
         symbol: Trading pair symbol
@@ -580,13 +681,15 @@ def get_position(symbol: str, account=None) -> tuple:
     Returns:
         Tuple: (positions, im_in_pos, pos_size, pos_sym, entry_px, pnl_perc, is_long)
     """
-    from src.nice_funcs_hyperliquid import get_position as hl_get_position
-    return hl_get_position(symbol, account)
+    manager = get_data_manager()
+    return manager.get_position(symbol, account)
 
 
-def get_account_value(address) -> float:
+def get_account_value(address=None) -> float:
     """
-    Get total account value (always uses API)
+    Get total account value
+
+    Uses WebSocket data if available, falls back to API.
 
     Args:
         address: Wallet address or Account object
@@ -594,13 +697,15 @@ def get_account_value(address) -> float:
     Returns:
         Total account value in USD
     """
-    from src.nice_funcs_hyperliquid import get_account_value as hl_get_account_value
-    return hl_get_account_value(address)
+    manager = get_data_manager()
+    return manager.get_account_value(address)
 
 
-def get_balance(address) -> float:
+def get_balance(address=None) -> float:
     """
-    Get available balance (always uses API)
+    Get available balance
+
+    Uses WebSocket data if available, falls back to API.
 
     Args:
         address: Wallet address or Account object
@@ -608,13 +713,15 @@ def get_balance(address) -> float:
     Returns:
         Available balance in USD
     """
-    from src.nice_funcs_hyperliquid import get_balance as hl_get_balance
-    return hl_get_balance(address)
+    manager = get_data_manager()
+    return manager.get_balance(address)
 
 
-def get_all_positions(address) -> list:
+def get_all_positions(address=None) -> list:
     """
-    Get all open positions (always uses API)
+    Get all open positions
+
+    Uses WebSocket data if available, falls back to API.
 
     Args:
         address: Wallet address or Account object
@@ -622,5 +729,49 @@ def get_all_positions(address) -> list:
     Returns:
         List of position dictionaries
     """
-    from src.nice_funcs_hyperliquid import get_all_positions as hl_get_all_positions
-    return hl_get_all_positions(address)
+    manager = get_data_manager()
+    return manager.get_all_positions(address)
+
+
+def get_recent_fills(limit: int = 10) -> list:
+    """
+    Get recent trade fills from WebSocket
+
+    Args:
+        limit: Maximum number of fills to return
+
+    Returns:
+        List of fill dictionaries
+    """
+    manager = get_data_manager()
+    return manager.get_recent_fills(limit)
+
+
+def add_position_listener(callback) -> None:
+    """
+    Add a callback for real-time position updates
+
+    Callback receives position dict when position changes.
+    """
+    manager = get_data_manager()
+    manager.add_position_listener(callback)
+
+
+def add_fill_listener(callback) -> None:
+    """
+    Add a callback for real-time fill notifications
+
+    Callback receives fill dict when trade executes.
+    """
+    manager = get_data_manager()
+    manager.add_fill_listener(callback)
+
+
+def add_account_listener(callback) -> None:
+    """
+    Add a callback for real-time account updates
+
+    Callback receives account state dict when balance/equity changes.
+    """
+    manager = get_data_manager()
+    manager.add_account_listener(callback)
