@@ -1964,7 +1964,8 @@ Return ONLY valid JSON with the following structure:
                                 remove_position(token)
                                 cprint(f"   📝 Removed {token} from position tracker", "cyan")
  
-                            print(f"✅ Position closed for {token}"
+                            print(f"✅ Position closed for {token}")
+                                  
                         else:
                             cprint(f"⏭️  Skipping partial reduction for {token}", "yellow")
                             cprint(f"   Current: ${current_position:.2f}, Target: ${target_allocation:.2f}", "white")
