@@ -195,6 +195,58 @@ def add_backtest_log(message, level="info"):
         print(f"⚠️ Error in add_backtest_log: {e}")
 
 
+def clear_console_logs():
+    """
+    Clear all console logs and reset the deduplication cache.
+    Called when user clicks 'Clear' button in the dashboard.
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    global _recent_logs
+
+    try:
+        # Clear the deduplication cache
+        with _dedup_lock:
+            _recent_logs.clear()
+
+        # Clear the log queue (drain all items)
+        while not log_queue.empty():
+            try:
+                log_queue.get_nowait()
+                log_queue.task_done()
+            except queue.Empty:
+                break
+
+        return True
+    except Exception as e:
+        print(f"⚠️ Error clearing console logs: {e}")
+        return False
+
+
+def clear_backtest_logs():
+    """
+    Clear all backtest console logs.
+    Called when user clicks 'Clear' button in the backtest dashboard.
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Clear the backtest log queue
+        while not backtest_log_queue.empty():
+            try:
+                backtest_log_queue.get_nowait()
+                backtest_log_queue.task_done()
+            except queue.Empty:
+                break
+
+        return True
+    except Exception as e:
+        print(f"⚠️ Error clearing backtest logs: {e}")
+        return False
+
+
 def add_rbi_log(message, level="info", strategy_name=None):
     """
     Add an RBI/backtest log with smart routing:

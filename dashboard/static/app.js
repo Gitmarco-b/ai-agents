@@ -420,10 +420,23 @@ function addConsoleMessage(message, level = 'info') {
     }
 }
 
-// Clear console
-function clearConsole() {
+// Clear console - calls backend API to clear logs properly
+async function clearConsole() {
     const consoleEl = document.getElementById('console');
-    consoleEl.innerHTML = '<div class="console-line info">Console cleared</div>';
+
+    try {
+        const response = await fetch('/api/console/clear', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            consoleEl.innerHTML = '<div class="console-line info">Console cleared</div>';
+        } else {
+            consoleEl.innerHTML = '<div class="console-line error">Failed to clear</div>';
+        }
+    } catch (error) {
+        console.error('Error clearing console:', error);
+        consoleEl.innerHTML = '<div class="console-line info">Console cleared</div>';
+    }
 }
 
 // Run agent

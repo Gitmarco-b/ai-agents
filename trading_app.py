@@ -36,7 +36,8 @@ sys.path.insert(0, str(BASE_DIR))
 # Import shared logging utility (prevents circular imports)
 from src.utils.logging_utils import (
     add_console_log, log_queue, log_position_open,
-    add_backtest_log, add_rbi_log, backtest_log_queue
+    add_backtest_log, add_rbi_log, backtest_log_queue,
+    clear_console_logs, clear_backtest_logs
 )
 from src.utils.settings_manager import (
     load_settings,
@@ -1026,16 +1027,38 @@ def run_trading_agent():
             with state_lock:
                 agent_executing = False
 
-            error_msg = f"Cycle error: {str(e)}"
-            add_console_log(error_msg, "error")
-            import traceback
-            traceback.print_exc()
-            add_console_log("Retrying in 60 sec", "warning")
+            error_str = str(e).lower()
 
-            # Wait with interruptible sleep
-            if stop_event.wait(timeout=60):
-                add_console_log("Stop signal received during error recovery", "info")
+            # Detect model-related errors and provide helpful messages
+            if "api_key" in error_str or "authentication" in error_str or "401" in error_str:
+                add_console_log("API key error - check Settings", "error")
+                add_console_log("Cycle stopped. Fix API key and restart.", "warning")
+                break  # Stop the cycle - user needs to fix settings
+            elif "rate_limit" in error_str or "rate limit" in error_str:
+                add_console_log("Rate limited - waiting 2 min", "warning")
+                if stop_event.wait(timeout=120):
+                    break
+                continue  # Retry after waiting
+            elif "quota" in error_str or "billing" in error_str or "insufficient" in error_str:
+                add_console_log("Quota exceeded - check billing", "error")
+                add_console_log("Cycle stopped. Check provider billing.", "warning")
+                break  # Stop - user needs to fix billing
+            elif "model" in error_str and ("not found" in error_str or "does not exist" in error_str):
+                add_console_log("Model not available - check Settings", "error")
+                add_console_log("Cycle stopped. Select a valid model.", "warning")
                 break
+            else:
+                # Generic error - log and retry
+                short_error = str(e)[:60] if len(str(e)) > 60 else str(e)
+                add_console_log(f"Cycle error: {short_error}", "error")
+                import traceback
+                traceback.print_exc()
+                add_console_log("Retrying in 60 sec", "warning")
+
+                # Wait with interruptible sleep
+                if stop_event.wait(timeout=60):
+                    add_console_log("Stop signal received", "info")
+                    break
 
     # Clean shutdown
     with state_lock:
@@ -1186,6 +1209,24 @@ def get_console():
         return jsonify([])
 
 
+@app.route('/api/console/clear', methods=['POST'])
+@login_required
+def clear_console():
+    """Clear the main console logs"""
+    try:
+        # Clear the queue and dedup cache
+        clear_console_logs()
+
+        # Clear the log file
+        with open(CONSOLE_FILE, 'w') as f:
+            json.dump([], f)
+
+        return jsonify({"success": True, "message": "Console cleared"})
+    except Exception as e:
+        print(f"❌ Error clearing console: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/backtest-console')
 @login_required
 def get_backtest_console():
@@ -1203,9 +1244,13 @@ def get_backtest_console():
 def clear_backtest_console():
     """Clear the backtest console logs"""
     try:
+        # Clear the queue
+        clear_backtest_logs()
+
+        # Clear the log file
         with open(BACKTEST_CONSOLE_FILE, 'w') as f:
             json.dump([], f)
-        add_backtest_log("Console cleared", "info")
+
         return jsonify({"success": True, "message": "Backtest console cleared"})
     except Exception as e:
         print(f"❌ Error clearing backtest console: {e}")

@@ -712,7 +712,31 @@ class TradingAgent:
             return str(response)
 
         except Exception as e:
-            cprint(f"❌ AI model error: {e}", "red")
+            error_str = str(e).lower()
+            model_name = getattr(self.model, 'model_name', 'Unknown')
+            provider = getattr(self.model, 'provider', 'Unknown')
+
+            # Detect specific error types for helpful messages
+            if "rate_limit" in error_str or "rate limit" in error_str:
+                msg = f"Rate limit: {provider}/{model_name}"
+                add_console_log(msg, "error")
+            elif "invalid_api_key" in error_str or "authentication" in error_str or "401" in error_str:
+                msg = f"Invalid API key: {provider}"
+                add_console_log(msg, "error")
+            elif "insufficient" in error_str or "quota" in error_str or "billing" in error_str:
+                msg = f"Quota exceeded: {provider}"
+                add_console_log(msg, "error")
+            elif "timeout" in error_str or "timed out" in error_str:
+                msg = f"Timeout: {provider}/{model_name}"
+                add_console_log(msg, "error")
+            elif "connection" in error_str or "network" in error_str:
+                msg = f"Connection error: {provider}"
+                add_console_log(msg, "error")
+            else:
+                msg = f"Model failed: {provider}/{model_name}"
+                add_console_log(msg, "error")
+
+            cprint(f"❌ {msg} - {str(e)[:80]}", "red")
             return None
 
     def _format_market_data_for_swarm(self, token, market_data):
