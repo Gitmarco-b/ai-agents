@@ -97,9 +97,9 @@ DEFAULT_SETTINGS = {
 
     # Main AI Model settings - Gemini 2.5 Flash (FREE, reliable)
     # Gemini has generous free tier with high reliability
-    "ai_provider": "gemini",          # FREE - reliable Google Gemini
-    "ai_model": "gemini-2.5-flash",   # Fast & capable, free tier
-    "ai_temperature": 0.5,            # Balanced for trading decisions
+    "ai_provider": "openrouter",          # FREE - reliable Google Gemini
+    "ai_model": "deepseek-chat-v3.1:free",   # Fast & capable, free tier
+    "ai_temperature": 0.6,            # Balanced for trading decisions
     "ai_max_tokens": 2048,            # Sufficient for trading analysis
 
     # Alternative configurations:
@@ -116,7 +116,7 @@ DEFAULT_SETTINGS = {
     "swarm_models": [
         {"provider": "gemini", "model": "gemini-2.0-flash", "temperature": 0.5, "max_tokens": 2048},
         {"provider": "gemini", "model": "gemini-2.5-flash", "temperature": 0.5, "max_tokens": 2048},
-        {"provider": "ollamafreeapi", "model": "deepseek-v3.2", "temperature": 0.5, "max_tokens": 2048},
+        {"provider": "ollamafreeapi", "model": "deepseek-chat-v3.1:free", "temperature": 0.5, "max_tokens": 2048},
         {"provider": "ollamafreeapi", "model": "qwen/qwen3:8b", "temperature": 0.5, "max_tokens": 2048},
     ],
 
