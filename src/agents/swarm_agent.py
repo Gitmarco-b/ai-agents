@@ -182,6 +182,24 @@ class SwarmAgent:
 
             elapsed = time.time() - start_time
 
+            # Check if response is valid (not None, has content)
+            is_valid_response = (
+                response is not None and
+                (hasattr(response, 'content') and response.content) or
+                (isinstance(response, str) and response.strip())
+            )
+
+            if not is_valid_response:
+                cprint(f"⚠️ {provider} returned empty/None response", "yellow")
+                return provider, {
+                    "provider": provider,
+                    "model": model_info["name"],
+                    "response": None,
+                    "success": False,
+                    "error": "Empty or None response from model",
+                    "response_time": round(elapsed, 2)
+                }
+
             return provider, {
                 "provider": provider,
                 "model": model_info["name"],

@@ -311,6 +311,11 @@ def get_available_models_for_provider(provider):
             'mistralai/devstral-2512:free': '(FREE) Mistral Devstral - Coding optimized',
             'tngtech/deepseek-r1t2-chimera:free': '(FREE) DeepSeek R1T2 Chimera - Hybrid reasoning',
             'kwaipilot/kat-coder-pro-v1:free': '(FREE) KAT Coder Pro V1 - Code generation',
+            # NVIDIA Nemotron FREE Models
+            'nvidia/nemotron-3-nano-30b-a3b:free': '(FREE) NVIDIA Nemotron 3 Nano 30B - MoE agentic AI',
+            'nvidia/nemotron-nano-12b-v2-vl:free': '(FREE) NVIDIA Nemotron Nano 12B VL - Multimodal',
+            'nvidia/nemotron-nano-9b-v2:free': '(FREE) NVIDIA Nemotron Nano 9B V2 - Unified reasoning',
+            'nvidia/llama-3.1-nemotron-nano-8b-v1:free': '(FREE) NVIDIA Llama 3.1 Nemotron Nano 8B',
             # xAI Grok Models
             'x-ai/grok-4.1-fast': 'Grok 4.1 Fast - Best agentic tool calling (2M context)',
             # DeepSeek Models

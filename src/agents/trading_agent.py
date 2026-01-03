@@ -1010,7 +1010,9 @@ FULL DATASET:
 
         all_positions = {}
         exchange_positions = {}  # For syncing with tracker
-        check_tokens = SYMBOLS if EXCHANGE in ["ASTER", "HYPERLIQUID"] else MONITORED_TOKENS
+        # CRITICAL: Use self.symbols (instance variable) NOT global SYMBOLS/MONITORED_TOKENS
+        # This ensures user-configured symbols from settings are respected
+        check_tokens = self.symbols
         total_position_count = 0
 
         for symbol in check_tokens:
@@ -1681,7 +1683,7 @@ Return ONLY valid JSON with the following structure:
             # --- NEW: make allocator aware of open positions ----------------
             open_positions = {}
             try:
-                for sym in SYMBOLS:
+                for sym in self.symbols:
                     try:
                         pos_data = n.get_position(sym, self.account)
                         _, im_in_pos, pos_size, _, entry_px, pnl, is_long = pos_data
@@ -1715,24 +1717,16 @@ Return ONLY valid JSON with the following structure:
                 ]
 
             # Filter to only valid tokens for this exchange
-            if EXCHANGE in ["ASTER", "HYPERLIQUID"]:
-                valid_tokens = SYMBOLS
-                buy_recommendations = buy_recommendations[
-                    buy_recommendations["token"].isin(valid_tokens)
+            # CRITICAL: Use self.symbols (instance variable) NOT global SYMBOLS
+            # This ensures user-configured symbols from settings are respected
+            valid_tokens = self.symbols
+            buy_recommendations = buy_recommendations[
+                buy_recommendations["token"].isin(valid_tokens)
+            ]
+            if not LONG_ONLY:
+                sell_recommendations = sell_recommendations[
+                    sell_recommendations["token"].isin(valid_tokens)
                 ]
-                if not LONG_ONLY:
-                    sell_recommendations = sell_recommendations[
-                        sell_recommendations["token"].isin(valid_tokens)
-                    ]
-            else:
-                valid_tokens = MONITORED_TOKENS
-                buy_recommendations = buy_recommendations[
-                    buy_recommendations["token"].isin(valid_tokens)
-                ]
-                if not LONG_ONLY:
-                    sell_recommendations = sell_recommendations[
-                        sell_recommendations["token"].isin(valid_tokens)
-                    ]
 
             # Check if we have any actionable recommendations
             num_longs = len(buy_recommendations)
@@ -1904,16 +1898,12 @@ Return ONLY valid JSON with the following structure:
                     print(f"💵 Keeping ${float(amount):.2f} in cash buffer")
                     continue
 
-                if EXCHANGE in ["ASTER", "HYPERLIQUID"]:
-                    if token not in SYMBOLS:
-                        cprint(f"⚠️ Skipping {token} - not a valid {EXCHANGE} symbol", "yellow")
-                        add_console_log(f"⚠️ Skipped invalid symbol: {token}", "warning")
-                        continue
-                else:
-                    if token not in MONITORED_TOKENS:
-                        cprint(f"⚠️ Skipping {token} - not in monitored tokens", "yellow")
-                        add_console_log(f"⚠️ Skipped invalid token: {token}", "warning")
-                        continue
+                # CRITICAL: Use self.symbols (instance variable) NOT global SYMBOLS
+                # This ensures user-configured symbols from settings are respected
+                if token not in self.symbols:
+                    cprint(f"⚠️ Skipping {token} - not in configured symbols list", "yellow")
+                    add_console_log(f"⚠️ Skipped invalid symbol: {token}", "warning")
+                    continue
 
                 direction_emoji = "📈" if direction == "LONG" else "📉"
                 print(f"\n🎯 Processing {direction} allocation for {token}...")
@@ -2216,7 +2206,8 @@ Return ONLY valid JSON with the following structure:
         cprint("📊 FINAL PORTFOLIO REPORT", "white", "on_blue", attrs=["bold"])
         cprint("=" * 60, "cyan")
 
-        check_tokens = SYMBOLS if EXCHANGE in ["ASTER", "HYPERLIQUID"] else MONITORED_TOKENS
+        # CRITICAL: Use self.symbols (instance variable) NOT global SYMBOLS/MONITORED_TOKENS
+        check_tokens = self.symbols
         active_positions = []
 
         # Print header
