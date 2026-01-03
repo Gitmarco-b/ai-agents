@@ -416,9 +416,15 @@ ACCOUNT INFO:
 - Max Position %: {max_position_pct}%
 - Cash Buffer: {cash_buffer_pct}%
 - Minimum Order: ${min_order:.2f} notional
+- Trading Cycle: Every {cycle_minutes} minutes (MINIMUM HOLD TIME)
 
 YOUR TASK:
 Analyze the current positions and AI signals to create an OPTIMAL allocation plan.
+
+⚠️ CRITICAL: Positions will be held for AT LEAST {cycle_minutes} minutes until the next cycle.
+- Factor this hold time into your risk assessment
+- Higher leverage + longer hold = more exposure to volatility
+- Be more conservative if cycle time is long relative to expected move
 
 ALLOCATION RULES:
 1. Higher confidence signals deserve larger allocations
@@ -428,6 +434,7 @@ ALLOCATION RULES:
 5. Account for existing positions - don't over-allocate to positions already at target size
 6. Factor in position PnL when deciding to hold, reduce, or close
 7. BUY signals = LONG positions, SELL signals = SHORT positions (if not LONG_ONLY)
+8. Consider the {cycle_minutes}-minute minimum hold time when sizing positions
 
 RESPOND WITH ONLY A VALID JSON OBJECT in this exact format:
 {{
@@ -1826,6 +1833,7 @@ Return ONLY valid JSON with the following structure:
             cprint(f"\n📈 AI Signals:", "cyan")
             cprint(signals_text, "white")
             cprint(f"\n💰 Available Balance: ${available_balance:.2f}", "green")
+            cprint(f"⏱️  Cycle Time: {SLEEP_BETWEEN_RUNS_MINUTES} min (minimum hold time)", "yellow")
 
             # ================================================================
             # STEP 5: Ask AI for Allocation Plan
@@ -1840,7 +1848,8 @@ Return ONLY valid JSON with the following structure:
                 leverage=LEVERAGE,
                 max_position_pct=MAX_POSITION_PERCENTAGE,
                 cash_buffer_pct=CASH_PERCENTAGE,
-                min_order=min_order_notional
+                min_order=min_order_notional,
+                cycle_minutes=SLEEP_BETWEEN_RUNS_MINUTES
             )
 
             ai_response = self.chat_with_ai(
