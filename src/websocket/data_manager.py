@@ -3,10 +3,22 @@ Moon Dev's WebSocket Data Manager
 Unified interface for real-time market data that replaces API polling
 Built with love by Moon Dev
 
+DATA SOURCE ARCHITECTURE:
+========================
+| Data Type        | Source    | Reason                              |
+|------------------|-----------|-------------------------------------|
+| Current Price    | WebSocket | Real-time updates, no polling       |
+| Bid/Ask          | WebSocket | Real-time order book                |
+| L2 Order Book    | WebSocket | Real-time depth, 100ms updates      |
+| OHLC/Candles     | API       | Historical data, batch fetching     |
+| User State       | API       | Account data, positions             |
+| Funding Rates    | API       | Periodic data, not real-time        |
+
 This module provides drop-in replacement functions that:
 1. Use WebSocket data when available and fresh
 2. Fall back to API polling when WebSocket is unavailable
 3. Maintain backward compatibility with existing code
+4. Always use API for historical/OHLC data (WebSocket only provides current candle)
 
 Usage:
     # Replace imports in your code:
@@ -14,7 +26,7 @@ Usage:
     # After:  from src.websocket.data_manager import ask_bid, get_current_price
 
     # Or use the smart functions that auto-select data source:
-    from src.websocket.data_manager import get_price, get_bid_ask
+    from src.websocket.data_manager import get_price, get_bid_ask, get_ohlcv_data
 """
 
 import time
@@ -245,6 +257,103 @@ class WebSocketDataManager:
         return None
 
     # ========================================================================
+    # OHLCV DATA METHODS (Always use API - historical data)
+    # ========================================================================
+
+    def get_ohlcv_data(
+        self,
+        symbol: str,
+        timeframe: str = '15m',
+        bars: int = 100,
+        add_indicators: bool = True
+    ):
+        """
+        Get OHLCV (candlestick) data for a symbol
+
+        NOTE: This always uses API polling because:
+        - Historical candles require batch fetching
+        - WebSocket only provides updates to current candle
+        - Analysis/backtesting needs complete historical data
+
+        Args:
+            symbol: Trading pair symbol (e.g., 'BTC')
+            timeframe: Candle timeframe (e.g., '1m', '5m', '15m', '1h', '4h', '1d')
+            bars: Number of bars to fetch (max 5000)
+            add_indicators: Whether to add technical indicators
+
+        Returns:
+            pd.DataFrame with columns: timestamp, open, high, low, close, volume
+        """
+        from src.nice_funcs_hyperliquid import get_data
+        return get_data(symbol, timeframe=timeframe, bars=bars, add_indicators=add_indicators)
+
+    def get_funding_rates(self, symbol: str) -> Optional[Dict]:
+        """
+        Get funding rates for a symbol (always uses API)
+
+        Args:
+            symbol: Trading pair symbol
+
+        Returns:
+            Dict with funding_rate, mark_price, open_interest
+        """
+        from src.nice_funcs_hyperliquid import get_funding_rates
+        return get_funding_rates(symbol)
+
+    def get_position(self, symbol: str, account=None) -> tuple:
+        """
+        Get current position for a symbol (always uses API)
+
+        Args:
+            symbol: Trading pair symbol
+            account: Optional account object
+
+        Returns:
+            Tuple: (positions, im_in_pos, pos_size, pos_sym, entry_px, pnl_perc, is_long)
+        """
+        from src.nice_funcs_hyperliquid import get_position
+        return get_position(symbol, account)
+
+    def get_account_value(self, address) -> float:
+        """
+        Get total account value (always uses API)
+
+        Args:
+            address: Wallet address or Account object
+
+        Returns:
+            Total account value in USD
+        """
+        from src.nice_funcs_hyperliquid import get_account_value
+        return get_account_value(address)
+
+    def get_balance(self, address) -> float:
+        """
+        Get available balance (always uses API)
+
+        Args:
+            address: Wallet address or Account object
+
+        Returns:
+            Available balance in USD
+        """
+        from src.nice_funcs_hyperliquid import get_balance
+        return get_balance(address)
+
+    def get_all_positions(self, address) -> list:
+        """
+        Get all open positions (always uses API)
+
+        Args:
+            address: Wallet address or Account object
+
+        Returns:
+            List of position dictionaries
+        """
+        from src.nice_funcs_hyperliquid import get_all_positions
+        return get_all_positions(address)
+
+    # ========================================================================
     # API FALLBACK METHODS
     # ========================================================================
 
@@ -415,3 +524,103 @@ def get_data_source(symbol: str) -> str:
             return 'websocket'
 
     return 'api'
+
+
+# ============================================================================
+# API-ONLY FUNCTIONS (Historical/Account data - always use API)
+# ============================================================================
+
+def get_ohlcv_data(
+    symbol: str,
+    timeframe: str = '15m',
+    bars: int = 100,
+    add_indicators: bool = True
+):
+    """
+    Get OHLCV (candlestick) data for a symbol
+
+    This always uses API because historical data requires batch fetching.
+    WebSocket only provides updates to the current forming candle.
+
+    Args:
+        symbol: Trading pair symbol (e.g., 'BTC')
+        timeframe: Candle timeframe (e.g., '1m', '5m', '15m', '1h', '4h', '1d')
+        bars: Number of bars to fetch (max 5000)
+        add_indicators: Whether to add technical indicators
+
+    Returns:
+        pd.DataFrame with columns: timestamp, open, high, low, close, volume
+    """
+    from src.nice_funcs_hyperliquid import get_data
+    return get_data(symbol, timeframe=timeframe, bars=bars, add_indicators=add_indicators)
+
+
+def get_funding_rates(symbol: str) -> Optional[Dict]:
+    """
+    Get funding rates for a symbol (always uses API)
+
+    Args:
+        symbol: Trading pair symbol
+
+    Returns:
+        Dict with funding_rate, mark_price, open_interest
+    """
+    from src.nice_funcs_hyperliquid import get_funding_rates as hl_get_funding
+    return hl_get_funding(symbol)
+
+
+def get_position(symbol: str, account=None) -> tuple:
+    """
+    Get current position for a symbol (always uses API)
+
+    Args:
+        symbol: Trading pair symbol
+        account: Optional account object
+
+    Returns:
+        Tuple: (positions, im_in_pos, pos_size, pos_sym, entry_px, pnl_perc, is_long)
+    """
+    from src.nice_funcs_hyperliquid import get_position as hl_get_position
+    return hl_get_position(symbol, account)
+
+
+def get_account_value(address) -> float:
+    """
+    Get total account value (always uses API)
+
+    Args:
+        address: Wallet address or Account object
+
+    Returns:
+        Total account value in USD
+    """
+    from src.nice_funcs_hyperliquid import get_account_value as hl_get_account_value
+    return hl_get_account_value(address)
+
+
+def get_balance(address) -> float:
+    """
+    Get available balance (always uses API)
+
+    Args:
+        address: Wallet address or Account object
+
+    Returns:
+        Available balance in USD
+    """
+    from src.nice_funcs_hyperliquid import get_balance as hl_get_balance
+    return hl_get_balance(address)
+
+
+def get_all_positions(address) -> list:
+    """
+    Get all open positions (always uses API)
+
+    Args:
+        address: Wallet address or Account object
+
+    Returns:
+        List of position dictionaries
+    """
+    from src.nice_funcs_hyperliquid import get_all_positions as hl_get_all_positions
+    return hl_get_all_positions(address)
