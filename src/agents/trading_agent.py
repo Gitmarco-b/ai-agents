@@ -1482,7 +1482,9 @@ Return ONLY valid JSON with the following structure:
 
             cprint(f"   ℹ️  Context: {position_context}", "cyan")
 
+            # ============================================================
             # SWARM MODE
+            # ============================================================
             if self.use_swarm_mode:
                 num_models = len(self.swarm.active_models) if self.swarm else 6
                 cprint(
@@ -1524,19 +1526,42 @@ Return ONLY valid JSON with the following structure:
                 )
 
                 cprint(f"✅ Swarm analysis complete for {token[:8]}!", "green")
-
-                # Short format for dashboard: "TOKEN -> ACTION | CONFIDENCE%"
                 add_console_log(f"✅ Swarm  {token} -> {action} | {confidence}% Sure", "success")
 
+                # ============================================================
+                # 🧠 NEW: Swarm Execution Pipeline (Phase 1–3)
+                # ============================================================
+                try:
+                    cprint("\n⚙️  Initiating Swarm Execution Pipeline...", "cyan")
+                    # Phase 1: Close opposite signals
+                    self.handle_exits()
+
+                    # Phase 2: Allocate new portfolio sizing
+                    allocations = self.allocate_portfolio()
+
+                    # Phase 3: Execute allocations if available
+                    if allocations and isinstance(allocations, dict) and len(allocations) > 0:
+                        self.execute_allocations(allocations)
+                        cprint("✅ Swarm execution complete!", "green", attrs=["bold"])
+                        add_console_log("✅ Swarm execution complete", "success")
+                    else:
+                        cprint("ℹ️  No valid allocations to execute.", "yellow")
+                        add_console_log("No allocations to execute", "info")
+
+                except Exception as exec_err:
+                    cprint(f"❌ Swarm execution pipeline failed: {exec_err}", "red")
+                    import traceback
+                    traceback.print_exc()
+                    add_console_log(f"Swarm execution pipeline error: {exec_err}", "error")
+
+                # Return full swarm output for dashboard/logging
                 return swarm_result
 
-            # SINGLE MODEL MODE
+            # ============================================================
+            # SINGLE MODEL MODE (unchanged)
+            # ============================================================
             else:
-                # -----------------------------
-                # Enriched strategy context
-                # -----------------------------
                 try:
-                    # robust token name detection
                     if isinstance(market_data, dict):
                         token_name = market_data.get("symbol") or market_data.get("token") or token
                     else:
@@ -1546,7 +1571,6 @@ Return ONLY valid JSON with the following structure:
                     strategy_context_text = "No strategy intelligence available."
                     strategy_context_json = {}
 
-                    # Attempt to get enriched context from StrategyAgent (cached)
                     try:
                         strat_obj = self._get_cached_strategy_context(token_name)
                     except Exception as e:
@@ -1558,7 +1582,6 @@ Return ONLY valid JSON with the following structure:
                         add_console_log("Strategies loaded", "success")
 
                     else:
-                        # fallback to legacy market_data['strategy_signals'] if present
                         if isinstance(market_data, dict) and "strategy_signals" in market_data:
                             try:
                                 strategy_context_text = (
@@ -1573,7 +1596,6 @@ Return ONLY valid JSON with the following structure:
                             strategy_context_text = "No strategy intelligence available."
                             strategy_context_json = {}
 
-                    # store last context for debug / dashboard
                     self.last_strategy_context = strategy_context_json
 
                 except Exception as e:
@@ -1625,8 +1647,6 @@ Return ONLY valid JSON with the following structure:
                 )
 
                 add_console_log(f"🎯 AI Analysis Complete for {token[:4]}!", "success")
-
-                # Short format for dashboard: "TOKEN -> ACTION | CONFIDENCE%"
                 add_console_log(f"{token} -> {action} | {confidence}%", "info")
 
                 return response
@@ -1650,6 +1670,7 @@ Return ONLY valid JSON with the following structure:
                 ignore_index=True,
             )
             return None
+
 
 
     def allocate_portfolio(self):
@@ -2265,7 +2286,6 @@ Return ONLY valid JSON with the following structure:
             add_console_log(f"🔄 TRADING CYCLE STARTED", "info")
 
             # CRITICAL FIX: Reset recommendations_df at the start of each cycle
-            # This prevents old recommendations from previous cycles from persisting
             self.recommendations_df = pd.DataFrame(
                 columns=["token", "action", "confidence", "reasoning"]
             )
@@ -2289,28 +2309,23 @@ Return ONLY valid JSON with the following structure:
             open_positions = self.fetch_all_open_positions()
             add_console_log(f"Found {len(open_positions)} open position(s)", "info")
 
-            # Check for stop signal
             if self.should_stop():
                 add_console_log("ℹ️ Stop signal received - aborting cycle", "warning")
                 return
 
             # STEP 2: COLLECT MARKET DATA
-            # Use self.symbols (set during __init__ from user settings or config defaults)
             tokens_to_trade = self.symbols
-
             add_console_log(f"📊 Collecting market data for {len(tokens_to_trade)} tokens...", "info")
-
             cprint("📊 Collecting market data for analysis...", "white", "on_blue")
+
             market_data = collect_all_tokens(
                 tokens=tokens_to_trade,
                 days_back=self.days_back,
                 timeframe=self.timeframe,
                 exchange=EXCHANGE,
             )
-
             add_console_log(f"Market data collected for {len(market_data)} tokens", "info")
 
-            # Check for stop signal
             if self.should_stop():
                 add_console_log("ℹ️ Stop signal received - aborting cycle", "warning")
                 return
@@ -2319,21 +2334,17 @@ Return ONLY valid JSON with the following structure:
             close_decisions = {}
             if open_positions:
                 close_decisions = self.analyze_open_positions_with_ai(open_positions, market_data)
-
-                # Check for stop signal before executing closes
                 if self.should_stop():
                     add_console_log("ℹ️ Stop signal received - skipping position closes", "warning")
                     return
-
                 self.execute_position_closes(close_decisions)
 
-            # Check for stop signal
             if self.should_stop():
                 add_console_log("ℹ️ Stop signal received - aborting cycle", "warning")
                 return
 
             # STEP 4: REFETCH POSITIONS & MARKET DATA AFTER CLOSURES
-            time.sleep(2)  # short delay to allow exchange updates
+            time.sleep(2)
             open_positions = self.fetch_all_open_positions()
             cprint("📊 Refreshing market data after position updates...", "white", "on_blue")
             market_data = collect_all_tokens(
@@ -2343,7 +2354,6 @@ Return ONLY valid JSON with the following structure:
                 exchange=EXCHANGE,
             )
 
-            # Check for stop signal
             if self.should_stop():
                 add_console_log("ℹ️ Stop signal received - aborting cycle", "warning")
                 return
@@ -2351,7 +2361,6 @@ Return ONLY valid JSON with the following structure:
             # STEP 5: ANALYZE TOKENS FOR NEW ENTRIES
             cprint("\n📈 Analyzing tokens for new entry opportunities...", "white", "on_blue")
             for token, data in market_data.items():
-                # Check for stop signal before each token analysis
                 if self.should_stop():
                     add_console_log(f"ℹ️ Stop signal received - stopping analysis at {token}", "warning")
                     return
@@ -2368,7 +2377,6 @@ Return ONLY valid JSON with the following structure:
                     print(analysis)
                     print("\n" + "=" * 50 + "\n")
 
-            # Check for stop signal before showing recommendations
             if self.should_stop():
                 add_console_log("ℹ️ Stop signal received - aborting cycle", "warning")
                 return
@@ -2378,94 +2386,114 @@ Return ONLY valid JSON with the following structure:
             summary_df = self.recommendations_df[["token", "action", "confidence"]].copy()
             print(summary_df.to_string(index=False))
 
-            # Check for stop signal before executing trades
             if self.should_stop():
                 add_console_log("ℹ️ Stop signal received - skipping trade execution", "warning")
                 return
 
             # ================================================================
-            # ORDER OF OPERATIONS (per dev_tasks.md 3.1):
-            # PHASE 1: CLOSE existing positions
-            # PHASE 2: RE-EVALUATE allocation (refresh balance)
-            # PHASE 3: OPEN new positions
+            # SWARM EXECUTION PIPELINE (NEW)
             # ================================================================
+            if self.use_swarm_mode:
+                try:
+                    cprint("\n🌊 SWARM MODE ACTIVE - Running unified execution pipeline...", "cyan", attrs=["bold"])
+                    add_console_log("🌊 Swarm mode active - executing unified pipeline", "info")
 
-            # PHASE 1: CLOSE - Exit positions based on SELL recommendations
-            cprint("\n" + "=" * 80, "yellow")
-            cprint("🔄 PHASE 1: CLOSE EXISTING POSITIONS", "yellow", attrs=["bold"])
-            cprint("=" * 80, "yellow")
-            self.handle_exits()
+                    # Phase 1: Close contradictory positions
+                    self.handle_exits()
 
-            # Check for stop signal
-            if self.should_stop():
-                add_console_log("ℹ️ Stop signal received - skipping portfolio allocation", "warning")
-                return
+                    # Phase 2: Allocate smart portfolio
+                    allocations = self.allocate_portfolio()
 
-            # PHASE 2: RE-EVALUATE - Refresh balance and verify closures
-            cprint("\n" + "=" * 80, "cyan")
-            cprint("🔄 PHASE 2: RE-EVALUATE ALLOCATION", "cyan", attrs=["bold"])
-            cprint("=" * 80, "cyan")
+                    # Phase 3: Execute allocations if valid
+                    if allocations and isinstance(allocations, dict) and len(allocations) > 0:
+                        self.execute_allocations(allocations)
+                        cprint("✅ Swarm unified execution complete!", "green", attrs=["bold"])
+                        add_console_log("✅ Swarm unified execution complete", "success")
+                    else:
+                        cprint("ℹ️  No actionable allocations from swarm.", "yellow")
+                        add_console_log("ℹ️ No actionable allocations from swarm", "info")
 
-            # Wait for exchange to update after closures
-            cprint("⏳ Waiting for exchange to process closures...", "cyan")
-            time.sleep(3)
+                except Exception as swarm_err:
+                    cprint(f"❌ Swarm execution pipeline failed: {swarm_err}", "red")
+                    import traceback
+                    traceback.print_exc()
+                    add_console_log(f"Swarm execution pipeline error: {swarm_err}", "error")
 
-            # Refresh account balance AFTER closures
-            try:
-                fresh_balance = get_account_balance(self.account)
-                cprint(f"💰 Fresh Account Balance: ${fresh_balance:,.2f}", "green", attrs=["bold"])
-                add_console_log(f"Phase 2: Fresh balance = ${fresh_balance:,.2f}", "info")
-            except Exception as e:
-                cprint(f"⚠️ Could not refresh balance: {e}", "yellow")
-                fresh_balance = 0
+                # Skip manual phase logic (already handled above)
+                cprint("\n✅ Skipping manual PHASE 1-3 since swarm executed automatically", "cyan")
+                add_console_log("Skipping manual phase pipeline (swarm handled it)", "info")
 
-            # Verify positions are actually closed
-            open_positions = self.fetch_all_open_positions()
-            total_open = sum(len(positions) for positions in open_positions.values())
-            cprint(f"📊 Remaining open positions: {total_open}", "cyan")
-
-            # Check for stop signal
-            if self.should_stop():
-                add_console_log("ℹ️ Stop signal received - skipping new position opening", "warning")
-                return
-
-            # PHASE 3: OPEN - Open new positions with fresh balance
-            cprint("\n" + "=" * 80, "green")
-            cprint("🔄 PHASE 3: OPEN NEW POSITIONS", "green", attrs=["bold"])
-            cprint("=" * 80, "green")
-
-            buy_recommendations = self.recommendations_df[self.recommendations_df["action"] == "BUY"]
-            sell_recommendations = self.recommendations_df[self.recommendations_df["action"] == "SELL"]
-
-            # Count actionable recommendations (for new positions)
-            actionable_count = len(buy_recommendations)
-            if not LONG_ONLY:
-                # Also count SELL recommendations for SHORT positions (when no existing position)
-                actionable_count += len(sell_recommendations)
-
-            if USE_PORTFOLIO_ALLOCATION and actionable_count > 0:
-                cprint(f"📊 Found {len(buy_recommendations)} BUY recommendations", "green")
-                if not LONG_ONLY:
-                    cprint(f"📉 Found {len(sell_recommendations)} SELL recommendations (potential shorts)", "yellow")
-
-                allocation = self.allocate_portfolio()
-                if allocation:
-                    # Check for stop signal before executing allocations
-                    if self.should_stop():
-                        add_console_log("ℹ️ Stop signal received - skipping allocations", "warning")
-                        return
-
-                    cprint("\n💼 Executing portfolio allocations with fresh balance...", "white", "on_blue")
-                    add_console_log("💼 Phase 3: Executing portfolio allocations", "info")
-                    self.execute_allocations(allocation)
             else:
-                cprint("📊 No actionable recommendations - skipping allocation", "cyan")
-                add_console_log("Phase 3: No actionable recommendations", "info")
+                # ================================================================
+                # ORDER OF OPERATIONS (per dev_tasks.md 3.1):
+                # PHASE 1: CLOSE existing positions
+                # PHASE 2: RE-EVALUATE allocation (refresh balance)
+                # PHASE 3: OPEN new positions
+                # ================================================================
+                cprint("\n" + "=" * 80, "yellow")
+                cprint("🔄 PHASE 1: CLOSE EXISTING POSITIONS", "yellow", attrs=["bold"])
+                cprint("=" * 80, "yellow")
+                self.handle_exits()
+
+                if self.should_stop():
+                    add_console_log("ℹ️ Stop signal received - skipping portfolio allocation", "warning")
+                    return
+
+                cprint("\n" + "=" * 80, "cyan")
+                cprint("🔄 PHASE 2: RE-EVALUATE ALLOCATION", "cyan", attrs=["bold"])
+                cprint("=" * 80, "cyan")
+
+                cprint("⏳ Waiting for exchange to process closures...", "cyan")
+                time.sleep(3)
+
+                try:
+                    fresh_balance = get_account_balance(self.account)
+                    cprint(f"💰 Fresh Account Balance: ${fresh_balance:,.2f}", "green", attrs=["bold"])
+                    add_console_log(f"Phase 2: Fresh balance = ${fresh_balance:,.2f}", "info")
+                except Exception as e:
+                    cprint(f"⚠️ Could not refresh balance: {e}", "yellow")
+                    fresh_balance = 0
+
+                open_positions = self.fetch_all_open_positions()
+                total_open = sum(len(positions) for positions in open_positions.values())
+                cprint(f"📊 Remaining open positions: {total_open}", "cyan")
+
+                if self.should_stop():
+                    add_console_log("ℹ️ Stop signal received - skipping new position opening", "warning")
+                    return
+
+                cprint("\n" + "=" * 80, "green")
+                cprint("🔄 PHASE 3: OPEN NEW POSITIONS", "green", attrs=["bold"])
+                cprint("=" * 80, "green")
+
+                buy_recommendations = self.recommendations_df[self.recommendations_df["action"] == "BUY"]
+                sell_recommendations = self.recommendations_df[self.recommendations_df["action"] == "SELL"]
+
+                actionable_count = len(buy_recommendations)
+                if not LONG_ONLY:
+                    actionable_count += len(sell_recommendations)
+
+                if USE_PORTFOLIO_ALLOCATION and actionable_count > 0:
+                    cprint(f"📊 Found {len(buy_recommendations)} BUY recommendations", "green")
+                    if not LONG_ONLY:
+                        cprint(f"📉 Found {len(sell_recommendations)} SELL recommendations (potential shorts)", "yellow")
+
+                    allocation = self.allocate_portfolio()
+                    if allocation:
+                        if self.should_stop():
+                            add_console_log("ℹ️ Stop signal received - skipping allocations", "warning")
+                            return
+
+                        cprint("\n💼 Executing portfolio allocations with fresh balance...", "white", "on_blue")
+                        add_console_log("💼 Phase 3: Executing portfolio allocations", "info")
+                        self.execute_allocations(allocation)
+                else:
+                    cprint("📊 No actionable recommendations - skipping allocation", "cyan")
+                    add_console_log("Phase 3: No actionable recommendations", "info")
 
             # STEP 8: FINAL PORTFOLIO REPORT
             self.show_final_portfolio_report()
 
-            # Clean up temp data
             try:
                 if os.path.exists("temp_data"):
                     for file in os.listdir("temp_data"):
@@ -2479,7 +2507,6 @@ Return ONLY valid JSON with the following structure:
             add_console_log("✅ Trading cycle complete", "success")
             cprint(f"{'=' * 80}\n", "cyan")
 
-            # Display Account Balance and Invested Totals
             try:
                 account_balance = get_account_balance(self.account)
             except Exception as e:
@@ -2505,6 +2532,7 @@ Return ONLY valid JSON with the following structure:
             cprint(f"\n❌ Error in trading cycle: {e}", "white", "on_red")
             import traceback
             traceback.print_exc()
+
 
 def main():
     """Main function - simple cycle every X minutes"""
