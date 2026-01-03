@@ -1,5 +1,5 @@
 """
-🌙 Moon Dev's OpenRouter Model Implementation
+OpenRouter Model Implementation
 Built with love by Moon Dev 🚀
 
 OpenRouter provides unified access to all major AI models through a single API.
@@ -17,17 +17,17 @@ class OpenRouterModel(BaseModel):
         # ============================================================================
         # 🆓 FREE MODELS (No cost - recommended for testing)
         # ============================================================================
-        "deepseek/deepseek-chat-v3.1:free": {
+        "deepseek-chat-v3.1:free": {
             "description": "(FREE) DeepSeek V3.1 - 671B hybrid reasoning - 128k context",
             "input_price": "FREE",
             "output_price": "FREE"
         },
-        "google/gemini-2.0-flash-exp:free": {
+        "gemini-2.0-flash-exp:free": {
             "description": "(FREE) Gemini 2.0 Flash - Fast multimodal - 1M context",
             "input_price": "FREE",
             "output_price": "FREE"
         },
-        "nvidia/nemotron-nano-9b-v2:free": {
+        "nemotron-nano-9b-v2:free": {
             "description": "(FREE) Nemotron Nano 9B - Compact reasoning model - 32k context",
             "input_price": "FREE",
             "output_price": "FREE"
@@ -36,7 +36,7 @@ class OpenRouterModel(BaseModel):
         # ============================================================================
         # 🚀 XAI GROK MODELS
         # ============================================================================
-        "x-ai/grok-4.1-fast": {
+        "grok-4.1-fast": {
             "description": "Grok 4.1 Fast - Best agentic tool calling - 2M context",
             "input_price": "$0.20/1M tokens",
             "output_price": "$0.50/1M tokens"
@@ -45,12 +45,12 @@ class OpenRouterModel(BaseModel):
         # ============================================================================
         # 🧮 DEEPSEEK MODELS
         # ============================================================================
-        "deepseek/deepseek-chat-v3.1": {
+        "deepseek-chat-v3.1": {
             "description": "DeepSeek V3.1 - 671B hybrid reasoning - 128k context",
             "input_price": "$0.20/1M tokens",
             "output_price": "$0.80/1M tokens"
         },
-        "deepseek/deepseek-reasoner": {
+        "deepseek-reasoner": {
             "description": "DeepSeek Reasoner - Advanced reasoning model - 64k context",
             "input_price": "$0.55/1M tokens",
             "output_price": "$2.19/1M tokens"
@@ -59,12 +59,12 @@ class OpenRouterModel(BaseModel):
         # ============================================================================
         # 🔮 QWEN MODELS
         # ============================================================================
-        "qwen/qwen3-max": {
+        "qwen3-max": {
             "description": "Qwen 3 Max - Flagship model - 256k context",
             "input_price": "$1.20/1M tokens",
             "output_price": "$6.00/1M tokens"
         },
-        "qwen/qwen-plus": {
+        "qwen-plus": {
             "description": "Qwen Plus - Balanced performance - 131k context",
             "input_price": "$0.40/1M tokens",
             "output_price": "$1.20/1M tokens"
@@ -73,12 +73,12 @@ class OpenRouterModel(BaseModel):
         # ============================================================================
         # 🌐 GOOGLE GEMINI MODELS
         # ============================================================================
-        "google/gemini-2.5-pro": {
+        "gemini-2.5-pro": {
             "description": "Gemini 2.5 Pro - Advanced reasoning - 128k context",
             "input_price": "$1.25/1M tokens",
             "output_price": "$5.00/1M tokens"
         },
-        "google/gemini-2.5-flash": {
+        "gemini-2.5-flash": {
             "description": "Gemini 2.5 Flash - Fast multimodal - 1M context",
             "input_price": "$0.10/1M tokens",
             "output_price": "$0.40/1M tokens"
@@ -87,12 +87,12 @@ class OpenRouterModel(BaseModel):
         # ============================================================================
         # 🤖 ANTHROPIC CLAUDE MODELS
         # ============================================================================
-        "anthropic/claude-sonnet-4": {
+        "claude-sonnet-4": {
             "description": "Claude Sonnet 4 - Balanced performance - 200k context",
             "input_price": "$3.00/1M tokens",
             "output_price": "$15.00/1M tokens"
         },
-        "anthropic/claude-haiku-3.5": {
+        "claude-haiku-3.5": {
             "description": "Claude Haiku 3.5 - Fast & efficient - 200k context",
             "input_price": "$0.80/1M tokens",
             "output_price": "$4.00/1M tokens"
@@ -101,12 +101,12 @@ class OpenRouterModel(BaseModel):
         # ============================================================================
         # 🔥 OPENAI MODELS
         # ============================================================================
-        "openai/gpt-4o": {
+        "gpt-4o": {
             "description": "GPT-4o - OpenAI flagship multimodal - 128k context",
             "input_price": "$2.50/1M tokens",
             "output_price": "$10.00/1M tokens"
         },
-        "openai/gpt-4o-mini": {
+        "gpt-4o-mini": {
             "description": "GPT-4o Mini - Fast & cheap - 128k context",
             "input_price": "$0.15/1M tokens",
             "output_price": "$0.60/1M tokens"
