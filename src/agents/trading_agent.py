@@ -1628,7 +1628,7 @@ Return ONLY valid JSON with the following structure:
             return None
 
 
-   def allocate_portfolio(self):
+      def allocate_portfolio(self):
         """
         Smart Portfolio Allocation - Equal Distribution
 
@@ -1643,7 +1643,7 @@ Return ONLY valid JSON with the following structure:
         4. Ensure minimum order size ($12 notional / leverage)
         5. NO PARTIAL CLOSES - positions are binary (KEEP 100% or CLOSE 100%)
         """
-        try:
+         try:
             cprint("\n" + "=" * 60, "cyan")
             cprint("💰 SMART PORTFOLIO ALLOCATION", "white", "on_blue", attrs=["bold"])
             cprint("=" * 60, "cyan")
@@ -1806,7 +1806,7 @@ Return ONLY valid JSON with the following structure:
             return None
 
 
-   def execute_allocations(self, allocation_dict):
+      def execute_allocations(self, allocation_dict):
         """Execute the allocations using AI entry for each position (supports LONG and SHORT)"""
         try:
             print("\n🚀 Executing portfolio allocations...")
