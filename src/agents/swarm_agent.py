@@ -183,10 +183,12 @@ class SwarmAgent:
             elapsed = time.time() - start_time
 
             # Check if response is valid (not None, has content)
+            # Must check None first, then check for valid content
             is_valid_response = (
-                response is not None and
-                (hasattr(response, 'content') and response.content) or
-                (isinstance(response, str) and response.strip())
+                response is not None and (
+                    (hasattr(response, 'content') and response.content) or
+                    (isinstance(response, str) and response.strip())
+                )
             )
 
             if not is_valid_response:
