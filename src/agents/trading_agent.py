@@ -1967,6 +1967,12 @@ Return ONLY valid JSON with the following structure:
         # Calculate margin per position
         usable_margin = available_balance * (MAX_POSITION_PERCENTAGE / 100)
         cash_buffer = available_balance * (CASH_PERCENTAGE / 100)
+
+        # Prevent division by zero
+        if len(new_signals) == 0:
+            cprint("   No signals after filtering.", "cyan")
+            return []
+
         margin_per_position = (usable_margin - cash_buffer) / len(new_signals)
         min_margin = 12 / LEVERAGE
 
@@ -1975,6 +1981,12 @@ Return ONLY valid JSON with the following structure:
             new_signals.sort(key=lambda x: x["confidence"], reverse=True)
             max_positions = int((usable_margin - cash_buffer) / min_margin)
             new_signals = new_signals[:max(1, max_positions)]
+
+            # Prevent division by zero after filtering
+            if len(new_signals) == 0:
+                cprint("   Insufficient margin for any positions.", "yellow")
+                return []
+
             margin_per_position = (usable_margin - cash_buffer) / len(new_signals)
 
         actions = []
@@ -2119,29 +2131,37 @@ Return ONLY valid JSON with the following structure:
 
                         cprint(f"   📈 Opening LONG: ${notional:.2f} notional (${margin_usd:.2f} margin)", "green")
 
+                        # Execute trade and verify success
+                        result = None
                         if EXCHANGE == "HYPERLIQUID":
-                            n.ai_entry(symbol, notional, leverage=LEVERAGE, account=self.account)
+                            result = n.ai_entry(symbol, notional, leverage=LEVERAGE, account=self.account)
                         elif EXCHANGE == "ASTER":
-                            n.ai_entry(symbol, notional, leverage=LEVERAGE)
+                            result = n.ai_entry(symbol, notional, leverage=LEVERAGE)
                         else:
-                            n.ai_entry(symbol, notional)
+                            result = n.ai_entry(symbol, notional)
 
-                        cprint(f"   ✅ LONG position opened!", "green")
-                        add_console_log(f"✅ Opened LONG {symbol} ${notional:.2f}", "success")
+                        # Verify trade executed successfully
+                        if result:
+                            cprint(f"   ✅ LONG position opened!", "green")
+                            add_console_log(f"✅ Opened LONG {symbol} ${notional:.2f}", "success")
 
-                        # Record in tracker
-                        if POSITION_TRACKER_AVAILABLE:
+                            # Record in tracker
+                            if POSITION_TRACKER_AVAILABLE:
+                                try:
+                                    record_position_entry(symbol=symbol, entry_price=0, size=notional, is_long=True)
+                                except Exception as e:
+                                    cprint(f"   ⚠️ Position tracker error: {e}", "yellow")
+
                             try:
-                                record_position_entry(symbol=symbol, entry_price=0, size=notional, is_long=True)
-                            except Exception:
-                                pass
+                                log_position_open(symbol, "LONG", notional)
+                            except Exception as e:
+                                cprint(f"   ⚠️ Position log error: {e}", "yellow")
 
-                        try:
-                            log_position_open(symbol, "LONG", notional)
-                        except Exception:
-                            pass
-
-                        executed_count += 1
+                            executed_count += 1
+                        else:
+                            cprint(f"   ❌ LONG position failed to open (no result returned)", "red")
+                            add_console_log(f"❌ {symbol} LONG failed (no result)", "error")
+                            failed_count += 1
 
                     # ============================================================
                     # OPEN_SHORT / INCREASE (for SHORT)
@@ -2169,31 +2189,40 @@ Return ONLY valid JSON with the following structure:
 
                         cprint(f"   📉 Opening SHORT: ${notional:.2f} notional (${margin_usd:.2f} margin)", "red")
 
+                        # Execute trade and verify success
+                        result = None
                         if EXCHANGE == "HYPERLIQUID":
-                            n.open_short(symbol, notional, leverage=LEVERAGE, account=self.account)
+                            result = n.open_short(symbol, notional, leverage=LEVERAGE, account=self.account)
                         elif EXCHANGE == "ASTER":
                             if hasattr(n, 'open_short'):
-                                n.open_short(symbol, notional, leverage=LEVERAGE)
+                                result = n.open_short(symbol, notional, leverage=LEVERAGE)
                             else:
                                 cprint(f"   ⚠️ open_short not available for ASTER", "yellow")
+                                failed_count += 1
                                 continue
 
-                        cprint(f"   ✅ SHORT position opened!", "green")
-                        add_console_log(f"✅ Opened SHORT {symbol} ${notional:.2f}", "success")
+                        # Verify trade executed successfully
+                        if result:
+                            cprint(f"   ✅ SHORT position opened!", "green")
+                            add_console_log(f"✅ Opened SHORT {symbol} ${notional:.2f}", "success")
 
-                        # Record in tracker
-                        if POSITION_TRACKER_AVAILABLE:
+                            # Record in tracker
+                            if POSITION_TRACKER_AVAILABLE:
+                                try:
+                                    record_position_entry(symbol=symbol, entry_price=0, size=notional, is_long=False)
+                                except Exception as e:
+                                    cprint(f"   ⚠️ Position tracker error: {e}", "yellow")
+
                             try:
-                                record_position_entry(symbol=symbol, entry_price=0, size=notional, is_long=False)
-                            except Exception:
-                                pass
+                                log_position_open(symbol, "SHORT", notional)
+                            except Exception as e:
+                                cprint(f"   ⚠️ Position log error: {e}", "yellow")
 
-                        try:
-                            log_position_open(symbol, "SHORT", notional)
-                        except Exception:
-                            pass
-
-                        executed_count += 1
+                            executed_count += 1
+                        else:
+                            cprint(f"   ❌ SHORT position failed to open (no result returned)", "red")
+                            add_console_log(f"❌ {symbol} SHORT failed (no result)", "error")
+                            failed_count += 1
 
                     else:
                         cprint(f"   ⚠️ Unknown action type: {action_type}", "yellow")
@@ -2260,8 +2289,22 @@ Return ONLY valid JSON with the following structure:
                     pos_data = n.get_position(token)
 
                 _, im_in_pos, pos_size, _, entry_px, pnl_perc, is_long = pos_data
+
+                # If position was manually closed, clean up tracker
+                if not im_in_pos and POSITION_TRACKER_AVAILABLE:
+                    try:
+                        remove_position(token)
+                    except Exception:
+                        pass
+
             except Exception as e:
                 cprint(f"⚠️ Error getting position for {token}: {e}", "yellow")
+                # Try to clean up tracker on error
+                if POSITION_TRACKER_AVAILABLE:
+                    try:
+                        remove_position(token)
+                    except Exception:
+                        pass
                 continue
 
             cprint(f"\n{'=' * 60}", "cyan")
@@ -2273,6 +2316,31 @@ Return ONLY valid JSON with the following structure:
                 position_dir = "LONG 🟢" if is_long else "SHORT 🔴"
                 cprint(f"💼 Current Position: {position_dir} | Size: {abs(pos_size):.4f} | PnL: {pnl_perc:.2f}%", "white")
                 cprint(f"{'=' * 60}", "cyan")
+
+                # CRITICAL: Check for stop loss FIRST (overrides all other logic)
+                if pnl_perc <= STOP_LOSS_THRESHOLD:
+                    cprint(f"🚨 STOP LOSS TRIGGERED: {pnl_perc:.2f}% <= {STOP_LOSS_THRESHOLD}%", "white", "on_red", attrs=["bold"])
+                    cprint(f"⚠️ FORCE CLOSING {position_dir} position (mandatory -2% stop loss)", "white", "on_red")
+
+                    try:
+                        if EXCHANGE == "HYPERLIQUID":
+                            n.close_complete_position(token, self.account)
+                        else:
+                            n.chunk_kill(token, max_usd_order_size, slippage)
+
+                        # Remove from position tracker
+                        if POSITION_TRACKER_AVAILABLE:
+                            remove_position(token)
+
+                        cprint("✅ Stop loss position closed successfully!", "white", "on_green")
+                        add_console_log(f"🚨 STOP LOSS: Closed {token} {position_dir} at {pnl_perc:.2f}%", "warning")
+                        positions_closed += 1
+
+                    except Exception as e:
+                        cprint(f"❌ Error closing stop loss position: {str(e)}", "white", "on_red")
+                        add_console_log(f"❌ Failed to close stop loss position {token}: {e}", "error")
+
+                    continue  # Skip to next token after stop loss
 
                 # Determine if signal contradicts position direction
                 signal_contradicts_position = (
