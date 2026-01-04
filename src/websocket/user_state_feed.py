@@ -16,10 +16,9 @@ import json
 import time
 import threading
 import logging
-from typing import Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional
 from datetime import datetime
 from dataclasses import dataclass, field
-from collections import defaultdict
 
 from termcolor import cprint
 
@@ -325,27 +324,25 @@ class UserStateFeed:
 
             # Load positions
             positions = get_all_positions(self._user_address)
-            with self._lock:
-                for pos in positions:
-                    coin = pos.get('symbol', '')
-                    self._positions[coin] = Position(
-                        coin=coin,
-                        size=pos.get('size', 0),
-                        entry_price=pos.get('entry_price', 0),
-                        unrealized_pnl=0,
-                        return_on_equity=pos.get('pnl_percent', 0) / 100,
-                        leverage=1,
-                        last_update=datetime.now()
-                    )
+            for pos in positions:
+                coin = pos.get('symbol', '')
+                self._positions[coin] = Position(
+                    coin=coin,
+                    size=pos.get('size', 0),
+                    entry_price=pos.get('entry_price', 0),
+                    unrealized_pnl=0,
+                    return_on_equity=pos.get('pnl_percent', 0) / 100,
+                    leverage=1,
+                    last_update=datetime.now()
+                )
 
             # Load account state
             account_value = get_account_value(self._user_address)
             balance = get_balance(self._user_address)
 
-            with self._lock:
-                self._account_state.account_value = account_value
-                self._account_state.withdrawable = balance
-                self._account_state.last_update = datetime.now()
+            self._account_state.account_value = account_value
+            self._account_state.withdrawable = balance
+            self._account_state.last_update = datetime.now()
 
             self._initial_state_loaded = True
             cprint(f"Loaded {len(self._positions)} positions from API", "cyan")
@@ -365,14 +362,24 @@ class UserStateFeed:
 
     def _handle_ws_message(self, data: Dict):
         """Handle incoming WebSocket messages"""
-        channel = data.get("channel", "")
-
-        if channel == "userFills":
-            self._process_fills(data.get("data", []))
-        elif channel == "orderUpdates":
-            self._process_order_updates(data.get("data", []))
-        elif channel == "userEvents":
-            self._process_user_events(data.get("data", {}))
+        # Check if this is a user event message (the new format from SDK)
+        if "channel" in data:
+            channel = data.get("channel", "")
+            
+            if channel == "userFills":
+                self._process_fills(data.get("data", []))
+            elif channel == "orderUpdates":
+                self._process_order_updates(data.get("data", []))
+            elif channel == "user":
+                # This is the new userEvents format from Hyperliquid SDK
+                self._process_user_events(data.get("data", {}))
+            elif channel == "userEvents":
+                # Legacy format
+                self._process_user_events(data.get("data", {}))
+        else:
+            # Legacy format - check for direct user events
+            if "assetPositions" in data or "marginSummary" in data:
+                self._process_user_events(data)
 
     def _process_fills(self, fills_data: List):
         """Process user fills message"""
@@ -443,6 +450,56 @@ class UserStateFeed:
         if "marginSummary" in events_data:
             self._update_account_state(events_data.get("marginSummary", {}))
 
+        # Handle the new userEvents format from SDK
+        if "userEvents" in events_data:
+            user_events = events_data.get("userEvents", [])
+            for event in user_events:
+                if event.get("type") == "position":
+                    # Handle position events
+                    self._update_positions_from_event(event.get("data", []))
+                elif event.get("type") == "margin":
+                    # Handle margin events
+                    self._update_account_state_from_event(event.get("data", {}))
+
+    def _update_positions_from_event(self, positions_data: List):
+        """Update positions from user event data"""
+        updated_coins = []
+
+        with self._lock:
+            # Track which coins we've seen
+            seen_coins = set()
+
+            for pos_data in positions_data:
+                try:
+                    coin = pos_data.get("coin", "")
+                    size = float(pos_data.get("szi", 0))
+
+                    if size != 0:
+                        # Update or create position
+                        self._positions[coin] = Position(
+                            coin=coin,
+                            size=size,
+                            entry_price=float(pos_data.get("entryPx", 0)),
+                            unrealized_pnl=float(pos_data.get("unrealizedPnl", 0)),
+                            return_on_equity=float(pos_data.get("returnOnEquity", 0)),
+                            leverage=float(pos_data.get("leverage", {}).get("value", 1)),
+                            liquidation_price=float(pos_data.get("liquidationPx", 0)) if pos_data.get("liquidationPx") else None,
+                            margin_used=float(pos_data.get("marginUsed", 0)),
+                            last_update=datetime.now()
+                        )
+                        updated_coins.append(coin)
+                    elif coin in self._positions:
+                        # Position closed
+                        del self._positions[coin]
+                        updated_coins.append(coin)
+
+                except Exception as e:
+                    logger.error(f"Error updating position from event: {e}")
+
+        # Emit position updates
+        for coin in updated_coins:
+            self._emit_position_update(coin)
+
     def _update_positions(self, positions_data: List):
         """Update positions from user events"""
         updated_coins = []
@@ -491,135 +548,87 @@ class UserStateFeed:
             self._account_state.account_value = float(margin_data.get("accountValue", 0))
             self._account_state.withdrawable = float(margin_data.get("withdrawable", 0))
             self._account_state.total_margin_used = float(margin_data.get("totalMarginUsed", 0))
-            self._account_state.total_unrealized_pnl = float(margin_data.get("totalNtlPos", 0))
+            self._account_state.total_unrealized_pnl = float(margin_data.get("totalUnrealizedPnl", 0))
             self._account_state.last_update = datetime.now()
 
-        # Emit account update
-        for callback in self._on_account_update_callbacks:
-            try:
-                callback(self._account_state.to_dict())
-            except Exception as e:
-                logger.error(f"Error in account_update callback: {e}")
+        # Emit account update event
+        self._emit_account_update()
+
+    def _update_account_state_from_event(self, margin_data: Dict):
+        """Update account state from user event margin data"""
+        with self._lock:
+            self._account_state.account_value = float(margin_data.get("accountValue", 0))
+            self._account_state.withdrawable = float(margin_data.get("withdrawable", 0))
+            self._account_state.total_margin_used = float(margin_data.get("totalMarginUsed", 0))
+            self._account_state.total_unrealized_pnl = float(margin_data.get("totalUnrealizedPnl", 0))
+            self._account_state.last_update = datetime.now()
+
+        # Emit account update event
+        self._emit_account_update()
 
     def _emit_position_update(self, coin: str):
         """Emit position update event"""
-        with self._lock:
-            if coin in self._positions:
-                pos_data = self._positions[coin].to_dict()
-            else:
-                # Position closed
-                pos_data = {"coin": coin, "size": 0, "closed": True}
-
-        for callback in self._on_position_update_callbacks:
-            try:
-                callback(pos_data)
-            except Exception as e:
-                logger.error(f"Error in position_update callback: {e}")
+        position = self._positions.get(coin)
+        if position:
+            position_data = position.to_dict()
+            for callback in self._on_position_update_callbacks:
+                try:
+                    callback(position_data)
+                except Exception as e:
+                    logger.error(f"Error in position_update callback: {e}")
 
     def _emit_fill(self, fill: Fill):
         """Emit fill event"""
         fill_data = fill.to_dict()
-
         for callback in self._on_fill_callbacks:
             try:
                 callback(fill_data)
             except Exception as e:
                 logger.error(f"Error in fill callback: {e}")
 
-    # ========================================================================
-    # PUBLIC API - Get User State Data
-    # ========================================================================
+    def _emit_account_update(self):
+        """Emit account update event"""
+        account_data = self._account_state.to_dict()
+        for callback in self._on_account_update_callbacks:
+            try:
+                callback(account_data)
+            except Exception as e:
+                logger.error(f"Error in account_update callback: {e}")
+
+    def get_all_positions(self) -> Dict[str, Position]:
+        """Get all current positions"""
+        with self._lock:
+            return self._positions.copy()
 
     def get_position(self, coin: str) -> Optional[Position]:
         """Get position for a specific coin"""
         with self._lock:
             return self._positions.get(coin)
 
-    def get_all_positions(self) -> Dict[str, Position]:
-        """Get all current positions"""
+    def get_recent_fills(self) -> List[Fill]:
+        """Get recent fills"""
         with self._lock:
-            return {coin: pos for coin, pos in self._positions.items()}
-
-    def get_positions_list(self) -> List[Dict]:
-        """Get all positions as a list of dictionaries"""
-        with self._lock:
-            return [pos.to_dict() for pos in self._positions.values()]
+            return self._recent_fills.copy()
 
     def get_account_state(self) -> AccountState:
         """Get current account state"""
         with self._lock:
             return self._account_state
 
-    def get_recent_fills(self, limit: int = 10) -> List[Dict]:
-        """Get recent fills"""
+    def get_account_value(self) -> float:
+        """Get account value"""
         with self._lock:
-            return [fill.to_dict() for fill in self._recent_fills[:limit]]
+            return self._account_state.account_value
 
-    def has_position(self, coin: str) -> bool:
-        """Check if there's an open position for a coin"""
+    def get_withdrawable_balance(self) -> float:
+        """Get withdrawable balance"""
         with self._lock:
-            return coin in self._positions and self._positions[coin].size != 0
+            return self._account_state.withdrawable
 
-    def get_position_size(self, coin: str) -> float:
-        """Get position size for a coin (0 if no position)"""
-        with self._lock:
-            if coin in self._positions:
-                return self._positions[coin].size
-            return 0.0
+    def is_running(self) -> bool:
+        """Check if feed is running"""
+        return self._is_running
 
-    def get_total_pnl(self) -> float:
-        """Get total unrealized PnL across all positions"""
-        with self._lock:
-            return sum(pos.unrealized_pnl for pos in self._positions.values())
-
-    def is_position_stale(self, coin: str, max_age_seconds: float = 30.0) -> bool:
-        """Check if position data is stale"""
-        with self._lock:
-            if coin not in self._positions:
-                return True
-            age = (datetime.now() - self._positions[coin].last_update).total_seconds()
-            return age > max_age_seconds
-
-
-# ============================================================================
-# SINGLETON INSTANCE FOR GLOBAL ACCESS
-# ============================================================================
-
-_global_user_feed: Optional[UserStateFeed] = None
-_global_lock = threading.Lock()
-
-
-def get_user_state_feed(user_address: str = None) -> UserStateFeed:
-    """Get the global UserStateFeed instance (creates if needed)"""
-    global _global_user_feed
-    with _global_lock:
-        if _global_user_feed is None:
-            _global_user_feed = UserStateFeed(user_address=user_address)
-        return _global_user_feed
-
-
-def get_positions_realtime() -> List[Dict]:
-    """
-    Get all positions from WebSocket feed (real-time)
-
-    Returns:
-        List of position dictionaries
-    """
-    feed = get_user_state_feed()
-    if not feed._is_running:
-        return []
-    return feed.get_positions_list()
-
-
-def get_position_realtime(coin: str) -> Optional[Dict]:
-    """
-    Get position for a coin from WebSocket feed (real-time)
-
-    Returns:
-        Position dictionary or None
-    """
-    feed = get_user_state_feed()
-    if not feed._is_running:
-        return None
-    pos = feed.get_position(coin)
-    return pos.to_dict() if pos else None
+    def __del__(self):
+        """Cleanup on destruction"""
+        self.stop()
