@@ -58,17 +58,39 @@ html, body {
 }
 
 .header-left {
-    display: flex;
-    align-content: flex-start;
-    align-items: center;
-    gap: 9px;
+display: flex;
+align-content: flex-start;
+align-items: center;
+gap: 9px;
 }
 
-.header h1 {
-    font-size: 16px;
-    font-weight: 600;
-    letter-spacing: -0.5px;
+/* Logo sizing (≈18px header title) */
+.logo-header {
+font-size: 16px;
+font-weight: 600;
+letter-spacing: -0.4px;
 }
+
+.logo {
+display: inline-flex;
+align-items: baseline;
+}
+
+.logo-pulse {
+height: 0.9em;
+width: auto;
+margin: 0 4px;
+vertical-align: -0.12em;
+}
+
+.logo-l {
+margin-right: -2px;
+}
+
+.logo-r {
+margin-left: -4px;
+}
+
 
 .agent-badge {
     padding: 6px 12px;
@@ -2198,11 +2220,63 @@ textarea.setting-input {
 
 /* Mobile adjustments for plan cards */
 @media (max-width: 900px) {
-    .plan-cards {
-        grid-template-columns: 1fr;
-    }
+.plan-cards {
+grid-template-columns: 1fr;
+}
+.plan-card.recommended::before {
+top: -8px;
+}
+}
 
-    .plan-card.recommended::before {
-        top: -8px;
-    }
+/* Pulse animation (uses current color) */
+.pulse-line {
+fill: none;
+stroke: currentColor;
+stroke-width: 5;
+stroke-linecap: round;
+stroke-linejoin: round;
+stroke-dasharray: 220;
+stroke-dashoffset: 220;
+animation: drawLine 3s ease-out infinite;
+filter: drop-shadow(0 0 6px currentColor);
+}
+
+@keyframes drawLine {
+0% {
+stroke-dashoffset: 220;
+opacity: 0;
+}
+8% {
+opacity: 1;
+}
+100% {
+stroke-dashoffset: 0;
+opacity: 1;
+}
+}
+
+/* Sync logo color + speed to status badge */
+.agent-badge.ready ~ .logo {
+color: #6EEB83;
+}
+
+.agent-badge.standby ~ .logo {
+color: #FACC15;
+}
+
+.agent-badge.running ~ .logo {
+color: #60A5FA;
+}
+
+.agent-badge.offline ~ .logo {
+color: #F87171;
+opacity: 0.7;
+}
+
+/* Speed changes */
+.agent-badge.running ~ .logo .pulse-line {
+animation-duration: 1.8s;
+}
+.agent-badge.standby ~ .logo .pulse-line {
+animation-duration: 3.8s;
 }

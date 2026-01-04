@@ -13,10 +13,16 @@
     <div class="dashboard">
         <!-- Header with Controls -->
         <header class="header">
-            <div class="header-left">
-                <h1>PULS-R</h1>
-                <span class="agent-badge" id="agent-badge">ready</span>
-            </div>
+<div class="header-left">
+<div class="logo logo-header">
+<span class="logo-l">PULS</span>
+<svg class="logo-pulse" viewBox="0 0 90 72" aria-hidden="true">
+<path class="pulse-line" d=" M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07 " />
+</svg>
+<span class="logo-r">R</span>
+</div>
+<span class="agent-badge" id="agent-badge">ready</span>
+</div>
             <div class="header-right">
                 <span class="timestamp" id="timestamp">--:--:--</span>
                 <button class="icon-btn" id="run-btn" onclick="runAgent()" title="Run Agent">
