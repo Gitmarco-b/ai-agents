@@ -224,3 +224,6 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+
+# Local cache directory
+.cache/
