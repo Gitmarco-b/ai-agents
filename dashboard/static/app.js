@@ -239,14 +239,8 @@ function updateAgentBadge(isRunning, isExecuting = false) {
 function updatePositions(positions) {
     const container = document.getElementById('positions');
     const badge = document.getElementById('position-count');
-    const closeAllBtn = document.getElementById('close-all-btn');
 
     badge.textContent = positions.length;
-
-    // Show/hide Close All button
-    if (closeAllBtn) {
-        closeAllBtn.style.display = positions.length > 0 ? 'inline-flex' : 'none';
-    }
 
     if (!positions || positions.length === 0) {
         container.innerHTML = '<div class="empty-state">No open positions</div>';
@@ -256,11 +250,9 @@ function updatePositions(positions) {
     container.innerHTML = positions.map(pos => `
         <div class="position">
             <div class="position-item">
-                <span class="position-label">Symbol</span>
                 <span class="position-value">${pos.symbol}</span>
             </div>
             <div class="position-item">
-                <span class="position-label">Side</span>
                 <span class="position-value"><span class="side ${pos.side.toLowerCase()}">${pos.side}</span></span>
             </div>
             <div class="position-item">
@@ -268,7 +260,7 @@ function updatePositions(positions) {
                 <span class="position-value">${Math.abs(pos.size).toFixed(4)}</span>
             </div>
             <div class="position-item">
-                <span class="position-label">Position Value</span>
+                <span class="position-label">Value</span>
                 <span class="position-value">$${pos.position_value ? pos.position_value.toFixed(2) : '0.00'}</span>
             </div>
             <div class="position-item">
@@ -281,17 +273,25 @@ function updatePositions(positions) {
             </div>
             <div class="position-item">
                 <span class="position-label">P&L</span>
-                <span class="position-value">
-                    <span class="pnl ${pos.pnl_percent >= 0 ? 'positive' : 'negative'}">
-                        ${pos.pnl_percent >= 0 ? '+' : ''}${pos.pnl_percent.toFixed(2)}%
-                    </span>
-                    <span class="pnl-value">
-                        (${pos.pnl_value ? '$' + pos.pnl_value.toFixed(2) : '$0.00'})
+                <span class="position-value pnl ${pos.pnl_percent >= 0 ? 'positive' : 'negative'}">
+                    ${pos.pnl_percent >= 0 ? '+' : ''}$${((pos.mark_price - pos.entry_price) * Math.abs(pos.size)).toFixed(2)}
+                    <span style="font-size: 9px; opacity: 0.8; margin-left: 3px;">
+                        (${pos.pnl_percent >= 0 ? '+' : ''}${pos.pnl_percent.toFixed(2)}%)
                     </span>
                 </span>
             </div>
+            </div>
             <div class="position-item position-actions">
-                <button class="btn btn-small btn-danger" onclick="closePosition('${pos.symbol}')">Close</button>
+                <div class="position-buttons">
+                    <button class="btn-position-action btn-close-position" onclick="closePosition('${pos.symbol}')" title="Close Position">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        Close
+                    </button>
+                    <a href="https://app.hyperliquid.xyz/trade/${pos.symbol}" target="_blank" class="btn-position-action btn-chart" title="View Chart on Exchange">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>
+                        Chart
+                    </a>
+                </div>
             </div>
         </div>
     `).join('');
@@ -299,27 +299,24 @@ function updatePositions(positions) {
 
 // Close a single position
 async function closePosition(symbol) {
-    if (!confirm(`Close ${symbol} position?`)) {
+    if (!confirm(`Are you sure you want to close your ${symbol} position?`)) {
         return;
     }
 
     try {
         addConsoleMessage(`Closing ${symbol} position...`, 'info');
 
-        const response = await fetch('/api/position/close', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ symbol: symbol })
+        const response = await fetch(`/api/close-position/${symbol}`, {
+            method: 'POST'
         });
 
         const data = await response.json();
 
         if (data.success) {
-            addConsoleMessage(`Closed ${symbol} position`, 'success');
-            // Refresh positions
-            updateDashboard();
+            addConsoleMessage(`${symbol} position closed successfully`, 'success');
+            updateDashboard(); // Refresh data
         } else {
-            addConsoleMessage(`Failed to close ${symbol}: ${data.error}`, 'error');
+            addConsoleMessage(`Failed to close ${symbol}: ${data.message}`, 'error');
         }
     } catch (error) {
         addConsoleMessage(`Error closing ${symbol}: ${error.message}`, 'error');
