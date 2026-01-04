@@ -1143,13 +1143,25 @@ def open_short(token, amount, slippage=None, leverage=DEFAULT_LEVERAGE, account=
         exchange = Exchange(account, constants.MAINNET_API_URL)
         order_result = exchange.order(token, False, pos_size, sell_price, {"limit": {"tif": "Ioc"}}, reduce_only=False)
 
-        print(colored(f'✅ Short position opened!', 'green'))
-        return order_result
+        # Validate order result
+        if order_result and order_result.get('status') == 'ok':
+            print(colored(f'✅ Short position opened!', 'green'))
+            # Log to dashboard
+            try:
+                position_value = pos_size * sell_price
+                add_console_log(f"📉 SHORT {token} for ${position_value:.2f}", "trade")
+            except Exception:
+                pass
+            return order_result
+        else:
+            error_msg = order_result.get('response', {}).get('error', 'Unknown error') if order_result else 'No response'
+            print(colored(f'❌ Short position failed: {error_msg}', 'red'))
+            raise Exception(f"Short order failed: {error_msg}")
 
     except Exception as e:
         print(colored(f'❌ Error opening short: {e}', 'red'))
         traceback.print_exc()
-        return None
+        raise  # Re-raise instead of returning None
     
     # close positions in opposite trade direction
 

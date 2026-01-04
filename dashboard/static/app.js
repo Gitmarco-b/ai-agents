@@ -234,7 +234,7 @@ function updateAgentBadge(isRunning, isExecuting = false) {
     }
 }
 
-// Update positions display with 7 fields
+// Update positions display with 7 fields + action buttons
 
 function updatePositions(positions) {
     const container = document.getElementById('positions');
