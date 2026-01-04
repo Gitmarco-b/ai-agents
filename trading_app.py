@@ -1211,6 +1211,88 @@ def stream_positions():
     )
 
 
+@app.route('/api/position/close', methods=['POST'])
+@login_required
+def close_position():
+    """API endpoint to close a single position"""
+    if not EXCHANGE_CONNECTED or n is None:
+        return jsonify({"success": False, "error": "Exchange not connected"}), 400
+
+    try:
+        data = request.get_json()
+        symbol = data.get('symbol')
+
+        if not symbol:
+            return jsonify({"success": False, "error": "Symbol required"}), 400
+
+        account = _get_account()
+        print(f"📉 Closing position for {symbol}...")
+        add_console_log(f"Closing {symbol} position (manual)", "info")
+
+        result = n.close_complete_position(symbol, account)
+
+        if result:
+            add_console_log(f"Closed {symbol} position", "trade")
+            return jsonify({"success": True, "symbol": symbol})
+        else:
+            return jsonify({"success": False, "error": "Failed to close position"}), 500
+
+    except Exception as e:
+        print(f"❌ Error closing position: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/positions/close-all', methods=['POST'])
+@login_required
+def close_all_positions():
+    """API endpoint to close all positions"""
+    if not EXCHANGE_CONNECTED or n is None:
+        return jsonify({"success": False, "error": "Exchange not connected"}), 400
+
+    try:
+        account = _get_account()
+        positions = get_positions_data()
+
+        if not positions:
+            return jsonify({"success": True, "closed_count": 0, "message": "No positions to close"})
+
+        closed_count = 0
+        errors = []
+
+        add_console_log(f"Closing all {len(positions)} positions (manual)", "info")
+
+        for pos in positions:
+            symbol = pos['symbol']
+            try:
+                print(f"📉 Closing {symbol}...")
+                result = n.close_complete_position(symbol, account)
+                if result:
+                    closed_count += 1
+                    add_console_log(f"Closed {symbol}", "trade")
+                else:
+                    errors.append(f"{symbol}: close failed")
+            except Exception as e:
+                errors.append(f"{symbol}: {str(e)}")
+
+        if closed_count > 0:
+            add_console_log(f"Closed {closed_count}/{len(positions)} positions", "success")
+
+        return jsonify({
+            "success": True,
+            "closed_count": closed_count,
+            "total": len(positions),
+            "errors": errors if errors else None
+        })
+
+    except Exception as e:
+        print(f"❌ Error closing all positions: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/trades')
 @login_required
 def get_trades():

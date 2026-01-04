@@ -239,14 +239,20 @@ function updateAgentBadge(isRunning, isExecuting = false) {
 function updatePositions(positions) {
     const container = document.getElementById('positions');
     const badge = document.getElementById('position-count');
-    
+    const closeAllBtn = document.getElementById('close-all-btn');
+
     badge.textContent = positions.length;
-    
+
+    // Show/hide Close All button
+    if (closeAllBtn) {
+        closeAllBtn.style.display = positions.length > 0 ? 'inline-flex' : 'none';
+    }
+
     if (!positions || positions.length === 0) {
         container.innerHTML = '<div class="empty-state">No open positions</div>';
         return;
     }
-    
+
     container.innerHTML = positions.map(pos => `
         <div class="position">
             <div class="position-item">
@@ -279,8 +285,67 @@ function updatePositions(positions) {
                     ${pos.pnl_percent >= 0 ? '+' : ''}${pos.pnl_percent.toFixed(2)}%
                 </span>
             </div>
+            <div class="position-item position-actions">
+                <button class="btn btn-small btn-danger" onclick="closePosition('${pos.symbol}')">Close</button>
+            </div>
         </div>
     `).join('');
+}
+
+// Close a single position
+async function closePosition(symbol) {
+    if (!confirm(`Close ${symbol} position?`)) {
+        return;
+    }
+
+    try {
+        addConsoleMessage(`Closing ${symbol} position...`, 'info');
+
+        const response = await fetch('/api/position/close', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbol: symbol })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            addConsoleMessage(`Closed ${symbol} position`, 'success');
+            // Refresh positions
+            updateDashboard();
+        } else {
+            addConsoleMessage(`Failed to close ${symbol}: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        addConsoleMessage(`Error closing ${symbol}: ${error.message}`, 'error');
+    }
+}
+
+// Close all positions
+async function closeAllPositions() {
+    if (!confirm('Close ALL open positions? This cannot be undone.')) {
+        return;
+    }
+
+    try {
+        addConsoleMessage('Closing all positions...', 'info');
+
+        const response = await fetch('/api/positions/close-all', {
+            method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            addConsoleMessage(`Closed ${data.closed_count} positions`, 'success');
+            // Refresh positions
+            updateDashboard();
+        } else {
+            addConsoleMessage(`Failed to close positions: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        addConsoleMessage(`Error closing positions: ${error.message}`, 'error');
+    }
 }
 
 // Update trades history (simplified plain text)
