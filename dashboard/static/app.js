@@ -218,12 +218,12 @@ function updateAgentBadge(isRunning, isExecuting = false) {
 
     if (isExecuting) {
         badge.textContent = 'RUNNING';
-        badge.className = 'agent-badge standby';
+        badge.className = 'agent-badge running';
         runBtn.style.display = 'none';
         pauseBtn.style.display = 'inline-flex';
     } else if (isRunning) {
         badge.textContent = 'stand by';
-        badge.className = 'agent-badge standby';
+        badge.className = 'agent-badge running';
         runBtn.style.display = 'none';
         pauseBtn.style.display = 'inline-flex';
     } else {
