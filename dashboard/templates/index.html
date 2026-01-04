@@ -54,14 +54,14 @@
         <!-- Account Summary -->
         <div class="account-summary">
             <div class="summary-item">
-                <span class="label">Account Balance</span>
-                <span class="value" id="balance">$0.00</span>
-                <span class="sublabel">Free USDC</span>
-            </div>
-            <div class="summary-item">
-                <span class="label">Total Equity</span>
+                <span class="label">Equity</span>
                 <span class="value" id="equity">$0.00</span>
                 <span class="sublabel">Including Positions</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">USDC Balance</span>
+                <span class="value" id="balance">$0.00</span>
+                <span class="sublabel">Free USDC</span>
             </div>
             <div class="summary-item">
                 <span class="label">P&L</span>
@@ -84,7 +84,6 @@
                     <div class="card-header">
                         <h2>Open Positions</h2>
                         <span class="badge" id="position-count">0</span>
-                        <button class="btn btn-small btn-danger" id="close-all-btn" onclick="closeAllPositions()" style="margin-left: auto; display: none;">Close All</button>
                     </div>
                     <div class="positions-container" id="positions">
                         <div class="empty-state">No open positions</div>
