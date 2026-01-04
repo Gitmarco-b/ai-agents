@@ -1234,7 +1234,7 @@ def stream_positions():
                     add_console_log("Real-time position streaming connected", "success")
                 else:
                     print("📡 WebSocket not available - falling back to periodic polling")
-                    add_console_log("WebSocket unavailable - API polling active", "info")
+                    #add_console_log("WebSocket unavailable - API polling active", "info")  can use for DEBUG only
 
                 # Send initial positions immediately
                 try:
