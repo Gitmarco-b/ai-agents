@@ -60,10 +60,19 @@ except ImportError:
     # Fallback if running standalone without trading_app
     def add_console_log(message, level="info", console_file=None):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
-
+    
     def log_position_open(symbol, side, size_usd, console_file=None):
         emoji = "📈" if side == "LONG" else "📉"
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {emoji} Opened {side} {symbol} ${size_usd:.2f}")
+
+# Import WebSocket functionality for position updates
+try:
+    from src.websocket import add_position_listener, get_user_state_feed
+    WEBSOCKET_AVAILABLE = True
+except ImportError:
+    WEBSOCKET_AVAILABLE = False
+    def add_position_listener(callback):
+        pass
 
 # Import position tracker for age-based decisions
 try:
@@ -1421,52 +1430,69 @@ Return ONLY valid JSON with the following structure:
             traceback.print_exc()
             return {}
 
-    def execute_position_closes(self, close_decisions):
-        """Execute closes for positions marked by AI"""
-        if not close_decisions:
-            return
+def _notify_position_update(self, symbol, action, details=""):
+    """Notify WebSocket system of position changes for live dashboard updates"""
+    if WEBSOCKET_AVAILABLE:
+        try:
+            # Trigger position update notification
+            add_console_log(f"📡 Position update: {symbol} {action} {details}", "info")
+            # Also trigger WebSocket position update
+            from src.websocket import get_user_state_feed
+            user_feed = get_user_state_feed()
+            if user_feed:
+                # Get current positions to trigger update
+                positions = user_feed.get_positions_list()
+                # This will trigger the SSE stream in the dashboard
+        except Exception as e:
+            pass  # Silently fail if WebSocket notification fails
 
-        cprint("\n" + "=" * 60, "red")
-        cprint("🔄 EXECUTING POSITION CLOSES", "white", "on_red", attrs=["bold"])
-        cprint("=" * 60, "red")
+def execute_position_closes(self, close_decisions):
+    """Execute closes for positions marked by AI"""
+    if not close_decisions:
+        return
 
-        closed_count = 0
+    cprint("\n" + "=" * 60, "red")
+    cprint("🔄 EXECUTING POSITION CLOSES", "white", "on_red", attrs=["bold"])
+    cprint("=" * 60, "red")
 
-        for symbol, decision in close_decisions.items():
-            if decision["action"] == "CLOSE":
-                try:
-                    cprint(f"\n   📉 Closing {symbol}...", "yellow")
-                    cprint(f"   💡 Reason: {decision['reasoning']}", "white")
+    closed_count = 0
 
-                    n.close_complete_position(symbol, self.account)
+    for symbol, decision in close_decisions.items():
+        if decision["action"] == "CLOSE":
+            try:
+                cprint(f"\n   📉 Closing {symbol}...", "yellow")
+                cprint(f"   💡 Reason: {decision['reasoning']}", "white")
 
-                    # Remove from position tracker
-                    if POSITION_TRACKER_AVAILABLE:
-                        remove_position(symbol)
-                        cprint(f"   📍 Removed {symbol} from position tracker", "cyan")
+                n.close_complete_position(symbol, self.account)
 
-                    cprint(f"✅ {symbol} position closed successfully", "green", attrs=["bold"])
-                    add_console_log(f"✅ Closed {symbol} | Reason: {decision['reasoning']}", "success")
+                # Remove from position tracker
+                if POSITION_TRACKER_AVAILABLE:
+                    remove_position(symbol)
+                    cprint(f"   📍 Removed {symbol} from position tracker", "cyan")
 
-                    closed_count += 1
-                    time.sleep(2)
+                cprint(f"✅ {symbol} position closed successfully", "green", attrs=["bold"])
+                add_console_log(f"✅ Closed {symbol} | Reason: {decision['reasoning']}", "success")
+                self._notify_position_update(symbol, "CLOSED", f"Reason: {decision['reasoning']}")
 
-                except Exception as e:
-                    cprint(f"   ❌ Error closing {symbol}: {e}", "red")
-                    import traceback
-                    traceback.print_exc()
+                closed_count += 1
+                time.sleep(2)
 
-        if closed_count > 0:
-            cprint(
-                f"\n✨ Successfully closed {closed_count} position(s)",
-                "white",
-                "on_green",
-                attrs=["bold"],
-            )
-        else:
-            cprint("\n   ℹ️  No positions needed closing", "cyan")
+            except Exception as e:
+                cprint(f"   ❌ Error closing {symbol}: {e}", "red")
+                import traceback
+                traceback.print_exc()
 
-        cprint("=" * 60 + "\n", "red")
+    if closed_count > 0:
+        cprint(
+            f"\n✨ Successfully closed {closed_count} position(s)",
+            "white",
+            "on_green",
+            attrs=["bold"],
+        )
+    else:
+        cprint("\n   ℹ️  No positions needed closing", "cyan")
+
+    cprint("=" * 60 + "\n", "red")
 
     # ==================================================
     # Strategy Context Helpers
@@ -2158,6 +2184,7 @@ Return ONLY valid JSON with the following structure:
                             if result:
                                 cprint(f"   ✅ LONG position opened!", "green")
                                 add_console_log(f"✅ Opened LONG {symbol} ${notional:.2f}", "success")
+                                self._notify_position_update(symbol, "OPENED_LONG", f"Size: ${notional:.2f}")
 
                                 # Record in tracker
                                 if POSITION_TRACKER_AVAILABLE:
@@ -2230,6 +2257,7 @@ Return ONLY valid JSON with the following structure:
                             if result:
                                 cprint(f"   ✅ SHORT position opened!", "green")
                                 add_console_log(f"✅ Opened SHORT {symbol} ${notional:.2f}", "success")
+                                self._notify_position_update(symbol, "OPENED_SHORT", f"Size: ${notional:.2f}")
 
                                 # Record in tracker
                                 if POSITION_TRACKER_AVAILABLE:

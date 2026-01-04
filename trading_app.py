@@ -672,6 +672,49 @@ def get_positions_data():
         # Get account
         account = _get_account()
         address = os.getenv("ACCOUNT_ADDRESS", account.address)
+        
+        # Try WebSocket first for real-time data
+        try:
+            from src.websocket import get_data_manager, is_websocket_connected
+            if is_websocket_connected():
+                dm = get_data_manager()
+                ws_positions = dm.get_all_positions(address)
+                if ws_positions:
+                    positions = []
+                    for pos in ws_positions:
+                        symbol = pos.get('coin', pos.get('symbol', 'Unknown'))
+                        size = pos.get('size', 0)
+                        if size == 0:
+                            continue
+                        entry_px = pos.get('entry_price', 0)
+                        pnl_perc = pos.get('pnl_percent', 0)
+                        is_long = size > 0
+                        side = "LONG" if is_long else "SHORT"
+                        
+                        # Get mark price from WebSocket
+                        try:
+                            mark_price = dm.get_current_price(symbol)
+                        except Exception:
+                            mark_price = entry_px
+                        
+                        position_value = abs(size) * mark_price
+                        positions.append({
+                            "symbol": symbol,
+                            "size": float(size),
+                            "entry_price": float(entry_px),
+                            "mark_price": float(mark_price),
+                            "position_value": float(position_value),
+                            "pnl_percent": float(pnl_perc),
+                            "pnl_value": float(pos.unrealized_pnl) if hasattr(pos, 'unrealized_pnl') else 0,
+                            "side": side
+                        })
+                    print(f"📡 WebSocket: {len(positions)} positions (real-time)")
+                    return positions
+        except ImportError:
+            print("⚠️ WebSocket module not available, falling back to API")
+        except Exception as ws_err:
+            print(f"⚠️ WebSocket error: {ws_err}, falling back to API")
+        address = os.getenv("ACCOUNT_ADDRESS", account.address)
 
         # Try WebSocket first for real-time data
         try:
@@ -946,12 +989,12 @@ def run_trading_agent():
         trading_agent_module = "src.agents.trading_agent"
     except ImportError:
         try:
-            from trading_agent import TradingAgent, EXCHANGE
+            from src.agents.trading_agent import TradingAgent, EXCHANGE
             trading_agent_module = "trading_agent"
         except ImportError:
             import sys
             sys.path.insert(0, str(BASE_DIR / "src" / "agents"))
-            from trading_agent import TradingAgent, EXCHANGE
+            from src.agents.trading_agent import TradingAgent, EXCHANGE
             trading_agent_module = "trading_agent (sys.path)"
 
     add_console_log("Loaded trading_agent", "info")
@@ -1182,97 +1225,79 @@ def get_data():
 @app.route('/api/positions/stream')
 @login_required
 def stream_positions():
-    """SSE endpoint for real-time position updates via WebSocket"""
-    def generate():
-        import time
-        last_positions = None
-        
-        # Set up WebSocket position listener
-        try:
-            from src.websocket import get_user_state_feed, is_websocket_connected
-            if is_websocket_connected():
-                user_feed = get_user_state_feed()
-                
-                def on_position_update(pos_data):
-                    # Signal that positions have been updated
-                    global websocket_positions, websocket_positions_lock
-                    with websocket_positions_lock:
-                        # Get all current positions using the correct method
-                        all_positions = user_feed.get_positions_list()
-                        positions_json = json.dumps(all_positions)
-                        # Store in global variable for immediate access
-                        websocket_positions = all_positions
-                        websocket_positions_updated.set()
-                        # Yield the updated positions
-                        yield f"data: {positions_json}\n\n"
-                
-                # Add the listener to the user state feed
-                user_feed.add_dashboard_listener(on_position_update)
-        except ImportError:
-            print("⚠️ WebSocket module not available for streaming")
-
-        while True:
+        """SSE endpoint for real-time position updates via WebSocket"""
+        def generate():
+            import time
+            last_positions = None
+            connected = False
+            
+            # Try to set up WebSocket connection first
             try:
-                # Check if we have WebSocket updates
-                if websocket_positions_updated.wait(timeout=0.1):
-                    # WebSocket update available
-                    with websocket_positions_lock:
-                        positions = websocket_positions[:]
-                        positions_json = json.dumps(positions)
-                        websocket_positions_updated.clear()
+                from src.websocket import get_data_manager, is_websocket_connected, get_user_state_feed
+                connected = is_websocket_connected()
+                if connected:
+                    dm = get_data_manager()
+                    user_feed = get_user_state_feed()
                     
-                    # Only send if changed
-                    if positions_json != last_positions:
-                        last_positions = positions_json
-                        yield f"data: {positions_json}\n\n"
+                    # Add dashboard listener for position updates
+                    if user_feed:
+                        def on_position_update(pos_data):
+                            try:
+                                positions = get_positions_data()
+                                positions_json = json.dumps(positions)
+                                nonlocal last_positions
+                                if positions_json != last_positions:
+                                    last_positions = positions_json
+                                    yield f"data: {positions_json}\n\n"
+                            except Exception as e:
+                                print(f"❌ Position update callback error: {e}")
+                        
+                        user_feed.add_dashboard_listener(on_position_update)
+                        print("✅ WebSocket position streaming connected")
+                    else:
+                        print("⚠️ User state feed not available, falling back to polling")
+                        connected = False
                 else:
-                    # No WebSocket update, get positions via WebSocket (not API)
-                    # Use the data manager to get positions via WebSocket
-                    try:
-                        from src.websocket import get_data_manager, is_websocket_connected
-                        if is_websocket_connected():
-                            dm = get_data_manager()
-                            positions = dm.get_all_positions()
-                            positions_json = json.dumps(positions)
-                            
-                            # Only send if changed
-                            if positions_json != last_positions:
-                                last_positions = positions_json
-                                yield f"data: {positions_json}\n\n"
-                        else:
-                            # Fallback to API if WebSocket not connected
-                            positions = get_positions_data()
-                            positions_json = json.dumps(positions)
-                            
-                            # Only send if changed
-                            if positions_json != last_positions:
-                                last_positions = positions_json
-                                yield f"data: {positions_json}\n\n"
-                    except Exception as api_error:
-                        # Final fallback to API
+                    print("⚠️ WebSocket not connected, falling back to polling")
+                    
+            except Exception as ws_err:
+                print(f"⚠️ WebSocket streaming initialization failed: {ws_err}")
+                connected = False
+            
+            # Main streaming loop
+            while True:
+                try:
+                    if connected:
+                        # WebSocket mode - wait for events
+                        time.sleep(0.1)  # Short sleep to prevent busy waiting
+                    else:
+                        # Polling fallback mode
                         positions = get_positions_data()
                         positions_json = json.dumps(positions)
                         
-                        # Only send if changed
                         if positions_json != last_positions:
                             last_positions = positions_json
                             yield f"data: {positions_json}\n\n"
                         
-            except GeneratorExit:
-                break
-            except Exception as e:
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
-                time.sleep(1)
-
-    return Response(
-        generate(),
-        mimetype='text/event-stream',
-        headers={
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no'
-        }
-    )
+                        time.sleep(1)  # Poll every second when WebSocket not available
+                        
+                except GeneratorExit:
+                    print("📡 Position stream generator exiting")
+                    break
+                except Exception as e:
+                    error_data = json.dumps({'error': f'Streaming error: {str(e)}'})
+                    yield f"data: {error_data}\n\n"
+                    time.sleep(2)  # Longer delay on errors
+        
+        return app.response_class(
+            generate(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no'
+            }
+        )
 
 
 @app.route('/api/position/close', methods=['POST'])
