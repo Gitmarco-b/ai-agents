@@ -1430,21 +1430,21 @@ Return ONLY valid JSON with the following structure:
             traceback.print_exc()
             return {}
 
-def _notify_position_update(self, symbol, action, details=""):
+def _notify_position_update(self, symbol, action, details="", direction="", size_usd=0):
     """Notify WebSocket system of position changes for live dashboard updates"""
     if WEBSOCKET_AVAILABLE:
         try:
-            # Trigger position update notification
             add_console_log(f"📡 Position update: {symbol} {action} {details}", "info")
-            # Also trigger WebSocket position update
+            # Trigger immediate dashboard refresh via WebSocket event broadcasting
             from src.websocket import get_user_state_feed
             user_feed = get_user_state_feed()
-            if user_feed:
-                # Get current positions to trigger update
-                positions = user_feed.get_positions_list()
-                # This will trigger the SSE stream in the dashboard
+            if user_feed and hasattr(user_feed, 'notify_position_changed'):
+                user_feed.notify_position_changed()
+                add_console_log(f"📡 WebSocket position update triggered", "info")
+            elif user_feed and hasattr(user_feed, 'on_position_change'):
+                user_feed.on_position_change(symbol, action, direction, size_usd)
         except Exception as e:
-            pass  # Silently fail if WebSocket notification fails
+            add_console_log(f"⚠️ WebSocket notification failed: {e}", "warning")
 
 def execute_position_closes(self, close_decisions):
     """Execute closes for positions marked by AI"""

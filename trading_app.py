@@ -1216,75 +1216,86 @@ def get_data():
 def stream_positions():
         """SSE endpoint for real-time position updates via WebSocket"""
         def generate():
+            import queue
             import time
-            last_positions = None
-            connected = False
-            
-            # Try to set up WebSocket connection first
+
+            # Create client-specific queue for this SSE connection
+            client_queue = queue.Queue()
+            sse_clients.append(client_queue)
+
+            print(f"📡 New SSE client connected. Total clients: {len(sse_clients)}")
+
             try:
-                from src.websocket import get_data_manager, is_websocket_connected, get_user_state_feed
-                connected = is_websocket_connected()
-                if connected:
-                    dm = get_data_manager()
-                    user_feed = get_user_state_feed()
-                    
-                    # Add dashboard listener for position updates
-                    if user_feed:
-                        def on_position_update(pos_data):
-                            try:
-                                positions = get_positions_data()
-                                positions_json = json.dumps(positions)
-                                nonlocal last_positions
-                                if positions_json != last_positions:
-                                    last_positions = positions_json
-                                    yield f"data: {positions_json}\n\n"
-                            except Exception as e:
-                                print(f"❌ Position update callback error: {e}")
-                        
-                        user_feed.add_dashboard_listener(on_position_update)
-                        print("✅ WebSocket position streaming connected")
-                    else:
-                        print("⚠️ User state feed not available, falling back to polling")
-                        connected = False
+                from src.websocket import is_websocket_connected
+                websocket_available = is_websocket_connected()
+
+                if websocket_available:
+                    print("📡 WebSocket available - streaming real-time updates")
+                    add_console_log("Real-time position streaming connected", "success")
                 else:
-                    print("⚠️ WebSocket not connected, falling back to polling")
-                    
-            except Exception as ws_err:
-                print(f"⚠️ WebSocket streaming initialization failed: {ws_err}")
-                connected = False
-            
-            # Main streaming loop
-            while True:
+                    print("📡 WebSocket not available - falling back to periodic polling")
+                    add_console_log("WebSocket unavailable - position polling fallback active", "warning")
+
+                # Send initial positions immediately
                 try:
-                    if connected:
-                        # WebSocket mode - wait for events
-                        time.sleep(0.1)  # Short sleep to prevent busy waiting
-                    else:
-                        # Polling fallback mode
-                        positions = get_positions_data()
-                        positions_json = json.dumps(positions)
-                        
-                        if positions_json != last_positions:
-                            last_positions = positions_json
-                            yield f"data: {positions_json}\n\n"
-                        
-                        time.sleep(1)  # Poll every second when WebSocket not available
-                        
-                except GeneratorExit:
-                    print("📡 Position stream generator exiting")
-                    break
+                    positions = get_positions_data()
+                    positions_json = json.dumps(positions)
+                    yield f"data: {positions_json}\n\n"
                 except Exception as e:
-                    error_data = json.dumps({'error': f'Streaming error: {str(e)}'})
+                    error_data = json.dumps({'error': f'Initial data error: {str(e)}'})
                     yield f"data: {error_data}\n\n"
-                    time.sleep(2)  # Longer delay on errors
-        
+
+                last_heartbeat = time.time()
+
+                # Main streaming loop
+                while True:
+                    try:
+                        # Check for WebSocket events in client queue
+                        try:
+                            event_data = client_queue.get(timeout=0.1)
+                            yield event_data
+                        except queue.Empty:
+                            pass
+
+                        # Send heartbeat every 30 seconds to keep connection alive
+                        current_time = time.time()
+                        if current_time - last_heartbeat > 30:
+                            yield f"data: {json.dumps({'heartbeat': True, 'timestamp': datetime.now().isoformat()})}\n\n"
+                            last_heartbeat = current_time
+
+                        # Fallback polling if WebSocket events not available
+                        if not websocket_available:
+                            positions = get_positions_data()
+                            positions_json = json.dumps(positions)
+                            yield f"data: {positions_json}\n\n"
+                            time.sleep(2)  # Poll every 2 seconds as fallback
+
+                    except GeneratorExit:
+                        print("📡 SSE client disconnected")
+                        break
+                    except Exception as e:
+                        error_msg = f"Streaming error: {str(e)}"
+                        print(f"❌ {error_msg}")
+                        error_data = json.dumps({'error': error_msg})
+                        yield f"data: {error_data}\n\n"
+                        time.sleep(5)  # Longer delay on errors
+
+            finally:
+                # Clean up client connection
+                try:
+                    sse_clients.remove(client_queue)
+                    print(f"📡 SSE client removed. Remaining clients: {len(sse_clients)}")
+                except ValueError:
+                    pass
+
         return app.response_class(
             generate(),
             mimetype='text/event-stream',
             headers={
                 'Cache-Control': 'no-cache',
                 'Connection': 'keep-alive',
-                'X-Accel-Buffering': 'no'
+                'X-Accel-Buffering': 'no',
+                'Access-Control-Allow-Origin': '*'
             }
         )
 
@@ -2662,15 +2673,109 @@ if __name__ == '__main__':
     # Get port from environment or default to 5000
     port = int(os.getenv('PORT', 5000))
 
+    # Global list to store SSE client connections for broadcasting
+    sse_clients = []
+
     # Start WebSocket feeds for real-time data
     print("📡 Starting WebSocket feeds...")
     try:
-        from src.websocket import start_websocket_feeds, is_websocket_connected
+        from src.websocket import (
+            start_websocket_feeds,
+            is_websocket_connected,
+            get_user_state_feed,
+            add_position_listener,
+            add_account_listener,
+            add_fill_listener
+        )
+
+        # Start the feeds
         start_websocket_feeds()
+
         if is_websocket_connected():
             print("✅ WebSocket feeds connected (real-time positions enabled)")
+
+            # Register dashboard listeners for real-time event propagation
+            try:
+                user_feed = get_user_state_feed()
+                if user_feed:
+
+                    def on_position_update(position_data):
+                        """Broadcast position updates to all SSE clients"""
+                        try:
+                            # Update global websocket_positions for backward compatibility
+                            with websocket_positions_lock:
+                                websocket_positions_updated.set()
+
+                            # Broadcast to SSE clients
+                            positions_json = json.dumps([position_data])  # Single position format
+                            for client_queue in sse_clients[:]:  # Copy list to avoid modification during iteration
+                                try:
+                                    client_queue.put(f"data: {positions_json}\n\n")
+                                except Exception as e:
+                                    print(f"⚠️ Error broadcasting to SSE client: {e}")
+                                    try:
+                                        sse_clients.remove(client_queue)
+                                    except ValueError:
+                                        pass
+
+                            print(f"📡 WebSocket position update broadcasted: {position_data.get('coin', 'Unknown')}")
+
+                        except Exception as e:
+                            print(f"❌ WebSocket position update callback error: {e}")
+
+                    def on_account_update(account_data):
+                        """Broadcast account balance updates to all SSE clients"""
+                        try:
+                            account_json = json.dumps(account_data)
+                            for client_queue in sse_clients[:]:
+                                try:
+                                    client_queue.put(f"data: {account_json}\n\n")
+                                except Exception as e:
+                                    print(f"⚠️ Error broadcasting account update to SSE client: {e}")
+                                    try:
+                                        sse_clients.remove(client_queue)
+                                    except ValueError:
+                                        pass
+
+                            print("📡 WebSocket account update broadcasted")
+                        except Exception as e:
+                            print(f"❌ WebSocket account update callback error: {e}")
+
+                    def on_fill_update(fill_data):
+                        """Broadcast trade execution updates to all SSE clients"""
+                        try:
+                            fill_json = json.dumps(fill_data)
+                            for client_queue in sse_clients[:]:
+                                try:
+                                    client_queue.put(f"data: {fill_json}\n\n")
+                                except Exception as e:
+                                    print(f"⚠️ Error broadcasting fill update to SSE client: {e}")
+                                    try:
+                                        sse_clients.remove(client_queue)
+                                    except ValueError:
+                                        pass
+
+                            print(f"📡 WebSocket fill update broadcasted: {fill_data.get('coin', 'Unknown')} {fill_data.get('side', '')}")
+
+                        except Exception as e:
+                            print(f"❌ WebSocket fill update callback error: {e}")
+
+                    # Register the listeners
+                    user_feed.add_dashboard_listener(on_position_update)
+                    add_account_listener(on_account_update)
+                    add_fill_listener(on_fill_update)
+
+                    print("✅ Dashboard listeners registered for real-time updates")
+
+                else:
+                    print("⚠️ User state feed not available for dashboard integration")
+
+            except Exception as listener_err:
+                print(f"⚠️ Failed to register dashboard listeners: {listener_err}")
+
         else:
             print("⚠️ WebSocket feeds started but not yet connected")
+
     except ImportError:
         print("⚠️ WebSocket module not available - using API polling")
     except Exception as ws_err:
