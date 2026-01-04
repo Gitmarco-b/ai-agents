@@ -273,9 +273,9 @@ function updatePositions(positions) {
             </div>
             <div class="position-item">
                 <span class="position-label">P&L</span>
-                <span class="position-value pnl ${pos.pnl_percent >= 0 ? 'positive' : 'negative'}">
-                    ${pos.pnl_percent >= 0 ? '+' : ''}$${((pos.mark_price - pos.entry_price) * Math.abs(pos.size)).toFixed(2)}
-                    <span style="font-size: 9px; opacity: 0.8; margin-left: 3px;">
+                    <span class="position-value pnl ${pos.pnl_percent >= 0 ? 'positive' : 'negative'}">
+                        ${pos.pnl_percent >= 0 ? '+' : ''}$${((pos.mark_price - pos.entry_price) * Math.abs(pos.size)).toFixed(2)}
+                    <span style="align: left; font-size: 9px; opacity: 0.8; margin-left: 3px;">
                         (${pos.pnl_percent >= 0 ? '+' : ''}${pos.pnl_percent.toFixed(2)}%)
                     </span>
                 </span>
