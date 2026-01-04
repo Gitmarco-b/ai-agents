@@ -206,7 +206,7 @@ DEFAULT_SWARM_MODE = False  # True = Swarm Mode (all Models), False = Single Mod
 # Minimum confidence threshold for swarm consensus to execute a trade
 # If consensus confidence is below this threshold, default to NOTHING
 # Recommended: 55-65% (requires clear majority, not just a tie)
-MIN_SWARM_CONFIDENCE = 55  # 55% = requires at least slight majority (e.g., 3/5 models agree)
+MIN_SWARM_CONFIDENCE = 65  # 55% = requires at least slight majority (e.g., 3/5 models agree)
 
 # 📈 TRADING MODE SETTINGS
 LONG_ONLY = False 
@@ -216,7 +216,7 @@ LONG_ONLY = False
 # ============================================================================
 # Minimum age before a position can be closed (in hours), Set to 0.0 to allow immediate exits
 # Examples: 0.0 = immediate, 0.25 = 15 min, 0.5 = 30 min, 1.0 = 1 hour
-MIN_AGE_HOURS = 0.0
+MIN_AGE_HOURS = 0.1
 
 # AI confidence threshold for closing positions (percentage), Lower values = more aggressive closing, Higher values = more conservative
 # Recommended range: 60-80%
@@ -226,10 +226,10 @@ MIN_CLOSE_CONFIDENCE = 70
 TP_THRESHOLD = 0.5
 
 # SINGLE MODEL SETTINGS
-AI_MODEL_TYPE = 'openai' 
-AI_MODEL_NAME = 'o4-mini' 
+AI_MODEL_TYPE = 'openrouter' 
+AI_MODEL_NAME = 'x-ai/grok-4.1-fast' 
 AI_TEMPERATURE = 0.6   # Official recommended "sweet spot"
-AI_MAX_TOKENS = 8000   # Increased for multi-step reasoning
+AI_MAX_TOKENS = 8024   # Increased for multi-step reasoning
 
 # 💰 POSITION SIZING & RISK MANAGEMENT
 USE_PORTFOLIO_ALLOCATION = True 
