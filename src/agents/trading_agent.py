@@ -2670,6 +2670,67 @@ Return ONLY valid JSON with the following structure:
         
         return False
 
+    def monitor_tp_sl_positions(self):
+        """Background TP/SL monitoring - runs every 60 seconds independently"""
+        cprint("🔄 Starting background TP/SL monitoring...", "cyan")
+        add_console_log("Background TP/SL monitoring started", "info")
+        
+        while not getattr(self, 'stop_monitoring', False):
+            try:
+                # Fetch current positions (reuses existing logic)
+                open_positions = self.fetch_all_open_positions()
+                
+                # Check each position for TP/SL thresholds
+                for symbol, positions in open_positions.items():
+                    for pos in positions:
+                        pnl_percent = pos["pnl_percent"]
+                        
+                        # Execute immediate TP/SL without AI processing
+                        if pnl_percent >= TAKE_PROFIT_THRESHOLD:
+                            self._execute_tp_close(symbol, pnl_percent)
+                        elif pnl_percent <= STOP_LOSS_THRESHOLD:
+                            self._execute_sl_close(symbol, pnl_percent)
+                            
+            except Exception as e:
+                cprint(f"⚠️ TP/SL monitoring error: {e}", "yellow")
+                add_console_log(f"TP/SL monitoring error: {e}", "warning")
+            
+            # Wait 60 seconds before next check
+            time.sleep(60)
+        
+        cprint("🛑 Background TP/SL monitoring stopped", "yellow")
+        add_console_log("Background TP/SL monitoring stopped", "info")
+
+    def _execute_tp_close(self, symbol, pnl_percent):
+        """Execute take profit close with minimal overhead"""
+        cprint(f"🚨 TAKE PROFIT: {symbol} at +{pnl_percent:.2f}%", "green", attrs=["bold"])
+        add_console_log(f"🚨 TP: {symbol} +{pnl_percent:.2f}%", "success")
+        
+        try:
+            close_result = n.close_complete_position(symbol, self.account)
+            if close_result and POSITION_TRACKER_AVAILABLE:
+                remove_position(symbol)
+                cprint(f"✅ {symbol} TP close successful", "green")
+            else:
+                cprint(f"⚠️ {symbol} TP close may have failed", "yellow")
+        except Exception as e:
+            cprint(f"❌ {symbol} TP close error: {e}", "red")
+
+    def _execute_sl_close(self, symbol, pnl_percent):
+        """Execute stop loss close with minimal overhead"""
+        cprint(f"🚨 STOP LOSS: {symbol} at {pnl_percent:.2f}%", "red", attrs=["bold"])
+        add_console_log(f"🚨 SL: {symbol} {pnl_percent:.2f}%", "warning")
+        
+        try:
+            close_result = n.close_complete_position(symbol, self.account)
+            if close_result and POSITION_TRACKER_AVAILABLE:
+                remove_position(symbol)
+                cprint(f"✅ {symbol} SL close successful", "green")
+            else:
+                cprint(f"⚠️ {symbol} SL close may have failed", "yellow")
+        except Exception as e:
+            cprint(f"❌ {symbol} SL close error: {e}", "red")
+
     def run(self):
         """Run the trading agent (implements BaseAgent interface)"""
         self.run_trading_cycle()
@@ -2927,12 +2988,21 @@ def main():
     print("🛑 Press Ctrl+C to stop.\n")
 
     agent = TradingAgent()
+    
+    # START BACKGROUND TP/SL MONITORING THREAD
+    import threading
+    monitoring_thread = threading.Thread(
+        target=agent.monitor_tp_sl_positions, 
+        daemon=True
+    )
+    monitoring_thread.start()
+    cprint("🔄 Background TP/SL monitoring thread started", "cyan")
 
-    while True:
-        try:
-            # Run the complete cycle
+    try:
+        while True:
+            # Run the complete cycle (existing logic unchanged)
             agent.run_trading_cycle()
-
+            
             # Log next cycle time BEFORE sleeping
             next_run = datetime.now() + timedelta(minutes=SLEEP_BETWEEN_RUNS_MINUTES)
             cprint(f"\n⏰ Next cycle at UTC: {next_run.strftime('%d-%m-%Y %H:%M:%S')}", "white", "on_green")
@@ -2941,16 +3011,21 @@ def main():
             # Sleep until next cycle
             time.sleep(SLEEP_BETWEEN_RUNS_MINUTES * 60)
 
-        except KeyboardInterrupt:
-            cprint("\n👋 AI Agent shutting down gracefully...", "white", "on_blue")
-            add_console_log("👋 Agent shutting down gracefully...", "info")
-            break
-        except Exception as e:
-            cprint(f"\n❌ Error in main loop: {e}", "white", "on_red")
-            import traceback
-            traceback.print_exc()
-            cprint(f"\n⏰ Retrying in {SLEEP_BETWEEN_RUNS_MINUTES} minutes...", "yellow")
-            time.sleep(SLEEP_BETWEEN_RUNS_MINUTES * 60)
+    except KeyboardInterrupt:
+        cprint("\n👋 AI Agent shutting down gracefully...", "white", "on_blue")
+        add_console_log("👋 Agent shutting down gracefully...", "info")
+        
+        # STOP BACKGROUND MONITORING
+        agent.stop_monitoring = True
+        monitoring_thread.join(timeout=2)
+        cprint("🛑 Background TP/SL monitoring stopped", "yellow")
+        
+    except Exception as e:
+        cprint(f"\n❌ Error in main loop: {e}", "white", "on_red")
+        import traceback
+        traceback.print_exc()
+        cprint(f"\n⏰ Retrying in {SLEEP_BETWEEN_RUNS_MINUTES} minutes...", "yellow")
+        time.sleep(SLEEP_BETWEEN_RUNS_MINUTES * 60)
 
 
 if __name__ == "__main__":
