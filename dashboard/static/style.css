@@ -554,7 +554,7 @@ margin-left: -4px;
 
 .position-actions-row {
     display: flex;
-    gap: 8px;
+    gap: 3px;
     padding-left: 0;
 }
 
@@ -735,9 +735,9 @@ margin-left: -4px;
 /* Empty State */
 .empty-state {
     text-align: center;
-    padding: 40px 20px;
+    padding: 9px 9px;
     color: var(--text-muted);
-    font-size: 14px;
+    font-size: 9px;
 }
 
 /* Footer */
