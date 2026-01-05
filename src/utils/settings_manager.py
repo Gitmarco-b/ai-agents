@@ -93,7 +93,7 @@ DEFAULT_SETTINGS = {
     "swarm_mode": "single",       # Default: single (options: single, swarm)
 
     # Token settings - Main trading tokens
-    "monitored_tokens": ["BTC", "ETH", "SOL", "AAVE", "ADA", "UNI", "SUI", "BNB", "DYDX", "DOT", "INJ", "FARTCOIN", "CHILLGUY", "DOGE"],
+    "monitored_tokens": ["BTC", "ETH", "SOL", "AAVE", "ADA", "UNI", "SUI", "BNB", "HYPE"],
 
     # Main AI Model settings - OpenRouter Kwaipilot Kat Coder Pro (best for trading)
     "ai_provider": "openrouter",                      # OpenRouter with Kwaipilot
