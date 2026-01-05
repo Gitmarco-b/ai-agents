@@ -1169,6 +1169,39 @@ textarea.setting-input {
     }
 }
 
+/* ---------- Open Positions: Mobile 2-column layout ---------- */
+@media (max-width: 1000px) {
+
+  /* Force 2-column grid for position rows */
+  .positions-container .position-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 12px;
+  }
+
+  /* Make each data cell behave nicely */
+  .positions-container .position-row > div {
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  /* Action buttons: keep inline */
+  .positions-container .position-actions {
+    grid-column: 1 / -1;        /* full width */
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  /* Buttons: compact + equal width */
+  .positions-container .position-actions button {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+}
+
 @media (max-width: 768px) {
     /* Mobile header - single line layout */
     .header {
