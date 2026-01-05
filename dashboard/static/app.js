@@ -25,6 +25,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load tier info to apply feature locks
     loadTierInfo();
 
+    // Initialize news ticker
+    initNewsTicker();
+
     // Initial updates
     updateDashboard();
     updateConsole();
@@ -208,6 +211,80 @@ function updateTimestamp() {
     }
 
     document.getElementById('timestamp').textContent = timeString;
+}
+
+// News Ticker Functionality
+let newsItems = [];
+let currentNewsIndex = 0;
+let newsTickerInterval;
+
+// Initialize news ticker
+function initNewsTicker() {
+    loadNews();
+    // Update news every minute
+    setInterval(loadNews, 60000);
+    // Rotate news every 10 seconds
+    newsTickerInterval = setInterval(rotateNews, 10000);
+}
+
+// Load news from API
+async function loadNews() {
+    try {
+        const response = await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN&api_key=27268e398dbae63ac36c42aef802965e5ec99756b5e65b5b693948d8c816fcaf');
+        const data = await response.json();
+
+        if (data && data.Data) {
+            newsItems = data.Data.map(item => ({
+                title: item.title,
+                source: item.source_info ? item.source_info.name : 'Unknown Source',
+                url: item.url
+            }));
+
+            // Reset to first item when new news loads
+            currentNewsIndex = 0;
+            updateNewsTicker();
+        }
+    } catch (error) {
+        console.error('Error loading news:', error);
+        // Fallback news if API fails
+        newsItems = [
+            { title: 'Market Update: Crypto markets showing mixed signals', source: 'Crypto News', url: '#' },
+            { title: 'Bitcoin volatility remains elevated amid regulatory concerns', source: 'Market Analysis', url: '#' },
+            { title: 'Ethereum network activity increases as DeFi projects gain traction', source: 'Blockchain Report', url: '#' }
+        ];
+        currentNewsIndex = 0;
+        updateNewsTicker();
+    }
+}
+
+// Rotate news items
+function rotateNews() {
+    if (newsItems.length === 0) return;
+
+    currentNewsIndex = (currentNewsIndex + 1) % newsItems.length;
+    updateNewsTicker();
+}
+
+// Update news ticker display
+function updateNewsTicker() {
+    const tickerContainer = document.getElementById('newsticker-track');
+    const newsItem = newsItems[currentNewsIndex];
+
+    if (newsItem) {
+        // Create clickable news item
+        tickerContainer.innerHTML = `
+            <span style="cursor: pointer; color: var(--accent-blue);" onclick="openNews('${newsItem.url}')">
+                [${newsItem.source}] ${newsItem.title}
+            </span>
+        `;
+    }
+}
+
+// Open news in new window
+function openNews(url) {
+    if (url && url !== '#') {
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
 }
 
 // Update agent badge with execution state (no API calls - uses passed data)
