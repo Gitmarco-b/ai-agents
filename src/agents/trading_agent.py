@@ -2838,6 +2838,7 @@ Return ONLY valid JSON with the following structure:
 
             cprint(f"💰 Account Balance: ${account_balance:,.2f}", "cyan", attrs=["bold"])
             cprint(f"🚀 Invested Total: ${invested_total:,.2f}", "cyan", attrs=["bold"])
+            return
 
         except Exception as e:
             cprint(f"\n❌ Error in trading cycle: {e}", "white", "on_red")
