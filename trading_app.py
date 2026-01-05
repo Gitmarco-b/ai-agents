@@ -662,8 +662,24 @@ def get_account_data():
         }
 
 
+# Rate limiting for API calls
+_last_api_call_time = 0
+_api_call_interval = 1.0  # Minimum 1 second between API calls
+
+def _rate_limit_api():
+    """Enforce rate limiting for API calls"""
+    global _last_api_call_time
+    current_time = time.time()
+    time_since_last_call = current_time - _last_api_call_time
+    
+    if time_since_last_call < _api_call_interval:
+        sleep_time = _api_call_interval - time_since_last_call
+        time.sleep(sleep_time)
+    
+    _last_api_call_time = time.time()
+
 def get_positions_data():
-    """Fetch ALL live open positions from HyperLiquid using WebSocket (real-time)"""
+    """Fetch ALL live open positions from HyperLiquid with rate limiting"""
     if not EXCHANGE_CONNECTED or n is None:
         print("⚠️ Exchange not connected or nice_funcs not loaded")
         return []
@@ -673,7 +689,7 @@ def get_positions_data():
         account = _get_account()
         address = os.getenv("ACCOUNT_ADDRESS", account.address)
         
-        # Try WebSocket first for real-time data
+        # Try WebSocket first for real-time data (no rate limits)
         try:
             from src.websocket import get_data_manager, is_websocket_connected
             if is_websocket_connected():
@@ -714,110 +730,82 @@ def get_positions_data():
             print("⚠️ WebSocket module not available, falling back to API")
         except Exception as ws_err:
             print(f"⚠️ WebSocket error: {ws_err}, falling back to API")
-        address = os.getenv("ACCOUNT_ADDRESS", account.address)
 
-        # Try WebSocket first for real-time data
-        try:
-            from src.websocket import get_data_manager, is_websocket_connected
-
-            if is_websocket_connected():
-                dm = get_data_manager()
-                ws_positions = dm.get_all_positions(address)
-
-                if ws_positions:
-                    positions = []
-                    for pos in ws_positions:
-                        symbol = pos.get('coin', pos.get('symbol', 'Unknown'))
-                        size = pos.get('size', 0)
-
-                        if size == 0:
-                            continue
-
-                        entry_px = pos.get('entry_price', 0)
-                        pnl_perc = pos.get('pnl_percent', 0)
-                        is_long = size > 0
-                        side = "LONG" if is_long else "SHORT"
-
-                        # Get mark price from WebSocket
-                        try:
-                            mark_price = dm.get_current_price(symbol)
-                        except Exception:
-                            mark_price = entry_px
-
-                        position_value = abs(size) * mark_price
-
-                        positions.append({
-                            "symbol": symbol,
-                            "size": float(size),
-                            "entry_price": float(entry_px),
-                            "mark_price": float(mark_price),
-                            "position_value": float(position_value),
-                            "pnl_percent": float(pnl_perc),
-                            "pnl_value": float(pos.unrealized_pnl) if hasattr(pos, 'unrealized_pnl') else 0,
-                            "side": side
-                        })
-
-                    print(f"📡 WebSocket: {len(positions)} positions (real-time)")
-                    return positions
-        except ImportError:
-            print("⚠️ WebSocket module not available, falling back to API")
-        except Exception as ws_err:
-            print(f"⚠️ WebSocket error: {ws_err}, falling back to API")
-
-        # Fallback to API polling
+        # Fallback to API polling with rate limiting
         print(f"🔍 API fallback: Fetching positions for {address[:8]}...")
 
-        from hyperliquid.info import Info
-        from hyperliquid.utils import constants
+        # Rate limit the API call
+        _rate_limit_api()
 
-        info = Info(constants.MAINNET_API_URL, skip_ws=True)
-        user_state = info.user_state(address)
+        try:
+            from hyperliquid.info import Info
+            from hyperliquid.utils import constants
 
-        positions = []
+            info = Info(constants.MAINNET_API_URL, skip_ws=True)
+            user_state = info.user_state(address)
 
-        if "assetPositions" not in user_state:
-            return []
+            positions = []
 
-        asset_positions = user_state["assetPositions"]
+            if "assetPositions" not in user_state:
+                return []
 
-        for position in asset_positions:
-            try:
-                raw_pos = position.get("position", {})
-                symbol = raw_pos.get("coin", "Unknown")
-                pos_size = float(raw_pos.get("szi", 0))
+            asset_positions = user_state["assetPositions"]
 
-                if pos_size == 0:
+            for position in asset_positions:
+                try:
+                    raw_pos = position.get("position", {})
+                    symbol = raw_pos.get("coin", "Unknown")
+                    pos_size = float(raw_pos.get("szi", 0))
+
+                    if pos_size == 0:
+                        continue
+
+                    entry_px = float(raw_pos.get("entryPx", 0))
+                    pnl_perc = float(raw_pos.get("returnOnEquity", 0)) * 100
+                    is_long = pos_size > 0
+                    side = "LONG" if is_long else "SHORT"
+
+                    # Rate limit price fetch
+                    _rate_limit_api()
+                    try:
+                        ask, bid, _ = n.ask_bid(symbol)
+                        mark_price = (ask + bid) / 2
+                    except Exception:
+                        mark_price = entry_px
+
+                    position_value = abs(pos_size) * mark_price
+
+                    positions.append({
+                        "symbol": symbol,
+                        "size": float(pos_size),
+                        "entry_price": float(entry_px),
+                        "mark_price": float(mark_price),
+                        "position_value": float(position_value),
+                        "pnl_percent": float(pnl_perc),
+                        "side": side
+                    })
+
+                except Exception as pos_err:
+                    print(f"❌ Error processing position: {pos_err}")
                     continue
 
-                entry_px = float(raw_pos.get("entryPx", 0))
-                pnl_perc = float(raw_pos.get("returnOnEquity", 0)) * 100
-                is_long = pos_size > 0
-                side = "LONG" if is_long else "SHORT"
+            print(f"📊 API: {len(positions)} positions")
+            return positions
 
+        except Exception as api_err:
+            # Handle rate limiting specifically
+            if hasattr(api_err, 'response') and api_err.response.status_code == 429:
+                print("⚠️ Hyperliquid API rate limit hit - waiting 30 seconds")
+                time.sleep(30)
+                # Retry once after waiting
                 try:
-                    ask, bid, _ = n.ask_bid(symbol)
-                    mark_price = (ask + bid) / 2
+                    return get_positions_data()  # Recursive call with fresh rate limit
                 except Exception:
-                    mark_price = entry_px
-
-                position_value = abs(pos_size) * mark_price
-
-                positions.append({
-                    "symbol": symbol,
-                    "size": float(pos_size),
-                    "entry_price": float(entry_px),
-                    "mark_price": float(mark_price),
-                    "position_value": float(position_value),
-                    "pnl_percent": float(pnl_perc),
-                    "side": side
-                })
-
-            except Exception as pos_err:
-                print(f"❌ Error processing position: {pos_err}")
-                continue
-
-        print(f"📊 API: {len(positions)} positions")
-        return positions
+                    print("❌ Rate limit retry failed")
+                    return []
+            else:
+                print(f"❌ API error: {api_err}")
+                return []
 
     except Exception as e:
         print(f"❌ Error in get_positions_data(): {e}")
