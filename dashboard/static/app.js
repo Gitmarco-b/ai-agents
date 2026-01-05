@@ -5,6 +5,16 @@ let updateInterval;
 let portfolioChart = null;
 let positionEventSource = null;
 
+// WebSocket Account State (Persistent - never resets to zero)
+const wsAccountState = {
+    equity: null,
+    balance: null,
+    pnl: null,
+    pnlPct: null,
+    exchange: null,
+    status: null
+};
+
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Dashboard initializing...');
@@ -55,11 +65,25 @@ function startPositionStream() {
 
         positionEventSource.onmessage = (event) => {
             try {
-                const positions = JSON.parse(event.data);
-                if (!positions.error) {
-                    updatePositions(positions);
-                    console.log('[SSE] Position update received:', positions.length, 'positions');
+                const data = JSON.parse(event.data);
+                
+                // Handle account updates (WebSocket-only Account Summary)
+                if (data.type === 'account') {
+                    mergeAccountState(data);
+                    renderAccountSummary(wsAccountState);
                 }
+                
+                // Handle position updates
+                if (data.positions && !data.error) {
+                    updatePositions(data.positions);
+                    console.log('[SSE] Position update received:', data.positions.length, 'positions');
+                }
+                
+                // Handle pulse graph updates
+                if (data.pulse && data.pulse.length) {
+                    updatePulseGraph(data.pulse);
+                }
+                
             } catch (e) {
                 console.error('[SSE] Parse error:', e);
             }
@@ -67,6 +91,10 @@ function startPositionStream() {
 
         positionEventSource.onerror = (error) => {
             console.warn('[SSE] Connection error, will retry...');
+            // WebSocket silence means "no change", not "zero"
+            // Only update status to disconnected
+            setStatus('DISCONNECTED');
+            // DO NOT modify equity, balance, P&L, or charts
             // EventSource auto-reconnects, but we can add a fallback
             if (positionEventSource.readyState === EventSource.CLOSED) {
                 setTimeout(startPositionStream, 5000);
@@ -75,6 +103,7 @@ function startPositionStream() {
 
         positionEventSource.onopen = () => {
             console.log('[SSE] Position stream connected');
+            setStatus('CONNECTED');
         };
 
     } catch (e) {
@@ -82,6 +111,102 @@ function startPositionStream() {
         // Fall back to polling
         console.log('[SSE] Falling back to polling');
     }
+}
+
+// Merge WebSocket updates (Do NOT Replace) - Account Summary State Handling
+function mergeAccountState(msg) {
+    if (!msg || msg.type !== 'account') return;
+
+    // Merge WebSocket updates - only update when values exist
+    if (typeof msg.equity === 'number') wsAccountState.equity = msg.equity;
+    if (typeof msg.balance === 'number') wsAccountState.balance = msg.balance;
+    if (typeof msg.pnl === 'number') wsAccountState.pnl = msg.pnl;
+    if (typeof msg.pnlPct === 'number') wsAccountState.pnlPct = msg.pnlPct;
+    if (typeof msg.exchange === 'string') wsAccountState.exchange = msg.exchange;
+    if (typeof msg.status === 'string') wsAccountState.status = msg.status;
+}
+
+// Defensive Rendering (No Zero Defaults) - Account Summary
+function renderAccountSummary(state) {
+    // Only update values when they exist - NEVER default to zero
+    if (state.equity !== null) {
+        document.getElementById('equity').textContent = `$${state.equity.toFixed(2)}`;
+    }
+
+    if (state.balance !== null) {
+        document.getElementById('balance').textContent = `$${state.balance.toFixed(2)}`;
+    }
+
+    if (state.pnl !== null && state.pnlPct !== null) {
+        const pnlEl = document.getElementById('pnl');
+        const pnlPctEl = document.getElementById('pnl-pct');
+        
+        const pnlClass = state.pnl >= 0 ? 'positive' : 'negative';
+        pnlEl.className = `value pnl ${pnlClass}`;
+        pnlEl.textContent = `${state.pnl >= 0 ? '+' : ''}$${state.pnl.toFixed(2)}`;
+        
+        pnlPctEl.className = `sublabel ${pnlClass}`;
+        pnlPctEl.textContent = `${state.pnlPct >= 0 ? '+' : ''}${state.pnlPct.toFixed(2)}%`;
+    }
+
+    if (state.exchange) {
+        document.getElementById('exchange').textContent = state.exchange;
+    }
+
+    if (state.status) {
+        updateStatus(state.status, false); // Don't change agent badge state
+    }
+}
+
+// Update status with proper handling
+function updateStatus(status, isRunning) {
+    const statusEl = document.getElementById('status');
+    statusEl.textContent = status;
+    statusEl.className = 'sublabel ' + (isRunning ? 'running' : 'ready');
+}
+
+// Set status function for WebSocket handling
+function setStatus(status) {
+    const statusEl = document.getElementById('status');
+    statusEl.textContent = status;
+    statusEl.className = 'sublabel ' + (status === 'CONNECTED' ? 'running' : 'offline');
+}
+
+// Update P&L function (for REST fallback compatibility)
+function updatePnL(pnl) {
+    const pnlEl = document.getElementById('pnl');
+    const pnlPctEl = document.getElementById('pnl-pct');
+    
+    const pnlClass = pnl >= 0 ? 'positive' : 'negative';
+    pnlEl.className = `value pnl ${pnlClass}`;
+    pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+    
+    const pnlPct = ((pnl / 10) * 100).toFixed(2); // Assuming $10 starting balance
+    pnlPctEl.className = `sublabel ${pnlClass}`;
+    pnlPctEl.textContent = `${pnl >= 0 ? '+' : ''}${pnlPct}%`;
+    
+    // Also update WebSocket state for consistency
+    wsAccountState.pnl = pnl;
+    wsAccountState.pnlPct = parseFloat(pnlPct);
+}
+
+// Update account balance function (for REST fallback compatibility)
+function updateBalance(available, equity) {
+    document.getElementById('balance').textContent = `$${available.toFixed(2)}`;
+    document.getElementById('equity').textContent = `$${equity.toFixed(2)}`;
+    
+    // Also update WebSocket state for consistency
+    wsAccountState.balance = available;
+    wsAccountState.equity = equity;
+}
+
+// Update exchange display function (for REST fallback compatibility)
+function updateExchange(exchange) {
+    const exchangeEl = document.getElementById('exchange');
+    exchangeEl.textContent = exchange || 'HyperLiquid';
+    
+    // Also update WebSocket state for consistency
+    wsAccountState.exchange = exchange || 'HyperLiquid';
 }
 
 
