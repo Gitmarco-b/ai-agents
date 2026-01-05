@@ -963,9 +963,9 @@ function applySettings(settings) {
     selectedTokens = settings.monitored_tokens || ['ETH', 'BTC', 'SOL'];
     updateTokenSelection();
 
-    // Main model settings - Default to OpenRouter with NVIDIA Nemotron Nano
+    // Main model settings - Default to OpenRouter with Kwaipilot Kat Coder Pro
     const defaultProvider = settings.ai_provider || 'openrouter';
-    const defaultModel = settings.ai_model || 'nvidia/nemotron-nano-12b-v2-vl:free';
+    const defaultModel = settings.ai_model || 'kwaipilot/kat-coder-pro-v1:free';
     document.getElementById('main-provider-select').value = defaultProvider;
     updateMainModelOptions();
     document.getElementById('main-model-select').value = defaultModel;

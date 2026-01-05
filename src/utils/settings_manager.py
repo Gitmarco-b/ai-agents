@@ -93,12 +93,12 @@ DEFAULT_SETTINGS = {
     "swarm_mode": "single",       # Default: single (options: single, swarm)
 
     # Token settings - Main trading tokens
-    "monitored_tokens": ["BTC", "ETH", "SOL", "LTC", "AAVE", "AVAX", "HYPE"],
+    "monitored_tokens": ["BTC", "ETH", "SOL", "AAVE", "ADA", "UNI", "SUI", "BNB", "DYDX", "DOT", "INJ", "FARTCOIN", "CHILLGUY", "DOGE"],
 
-    # Main AI Model settings - OpenRouter NVIDIA Nemotron 3 Nano (best for trading)
-    "ai_provider": "openrouter",                      # OpenRouter with NVIDIA Nemotron
-    "ai_model": "nvidia/nemotron-3-nano-30b-a3b:free", # NVIDIA Nemotron 3 Nano 30B - MoE agentic AI
-    "ai_temperature": 0.6,                            # Optimized for trading decisions
+    # Main AI Model settings - OpenRouter Kwaipilot Kat Coder Pro (best for trading)
+    "ai_provider": "openrouter",                      # OpenRouter with Kwaipilot
+    "ai_model": "kwaipilot/kat-coder-pro-v1:free",     # Kwaipilot Kat Coder Pro V1 - Code generation
+    "ai_temperature": 0.2,                            # Optimized for trading decisions
     "ai_max_tokens": 8024,                            # Sufficient for trading analysis
 
     # Trading Parameters
