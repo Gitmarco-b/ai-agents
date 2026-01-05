@@ -628,6 +628,36 @@ margin-left: -4px;
     color: white;
 }
 
+/* Desktop: compact Open Positions grid */
+@media (min-width: 1001px) {
+    .positions-container .position-row {
+        grid-template-columns:
+            1.1fr   /* Symbol */
+            0.9fr   /* Size */
+            1fr     /* Value */
+            1fr     /* Entry */
+            1fr     /* Mark */
+            1.2fr;  /* P&L */
+        column-gap: 10px;
+    }
+
+    .positions-container .position {
+        padding: 10px 12px;
+    }
+
+    /* Allow grid cells to shrink (Critical) */
+    .position-row > div {
+        min-width: 0;
+        white-space: nowrap;
+    }
+
+    /* Improve numeric density */
+    .position-row .position-value {
+        font-variant-numeric: tabular-nums;
+        font-size: 12px;
+    }
+}
+
 /* Positions Footer with Close All Button */
 .positions-footer {
     padding-top: 12px;
