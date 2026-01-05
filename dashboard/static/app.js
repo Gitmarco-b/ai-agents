@@ -952,7 +952,7 @@ function applySettings(settings) {
     // Chart settings
     document.getElementById('timeframe-select').value = settings.timeframe || '30m';
     document.getElementById('days-back-select').value = settings.days_back || 2;
-    document.getElementById('cycle-time-input').value = settings.sleep_minutes || 30;
+    document.getElementById('cycle-time-input').value = settings.sleep_minutes || 5;
 
     // Mode settings
     const swarmMode = settings.swarm_mode || 'single';
@@ -963,19 +963,19 @@ function applySettings(settings) {
     selectedTokens = settings.monitored_tokens || ['ETH', 'BTC', 'SOL'];
     updateTokenSelection();
 
-    // Main model settings - Default to OpenRouter with FREE DeepSeek V3.1 Nex-N1
+    // Main model settings - Default to OpenRouter with NVIDIA Nemotron Nano
     const defaultProvider = settings.ai_provider || 'openrouter';
-    const defaultModel = settings.ai_model || 'nex-agi/deepseek-v3.1-nex-n1:free';
+    const defaultModel = settings.ai_model || 'nvidia/nemotron-nano-12b-v2-vl:free';
     document.getElementById('main-provider-select').value = defaultProvider;
     updateMainModelOptions();
     document.getElementById('main-model-select').value = defaultModel;
 
     // Temperature and max tokens
-    const tempValue = Math.round((settings.ai_temperature || 0.3) * 100);
+    const tempValue = Math.round((settings.ai_temperature || 0.6) * 100);
     document.getElementById('main-temperature').value = tempValue;
     updateSliderValue('main-temperature', 'main-temp-value');
 
-    document.getElementById('main-max-tokens').value = settings.ai_max_tokens || 2000;
+    document.getElementById('main-max-tokens').value = settings.ai_max_tokens || 8024;
 
     // Swarm models - Default to 4 FREE OpenRouter models for cost-effective consensus
     // Source: https://openrouter.ai/collections/free-models

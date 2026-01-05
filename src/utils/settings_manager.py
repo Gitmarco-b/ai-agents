@@ -82,12 +82,12 @@ HYPERLIQUID_TOKENS = {
 }
 
 # Default settings - OPTIMIZED FOR TRADING
-# Uses OpenRouter with FREE DeepSeek V3.1 Nex-N1 as default
+# Uses OpenRouter with NVIDIA Nemotron Nano as default
 DEFAULT_SETTINGS = {
     # Chart settings
     "timeframe": "30m",           # Default: 30 minutes (optimal for trading signals)
     "days_back": 2,               # Default: 2 days of historical data
-    "sleep_minutes": 15,          # Default: 15 minutes between cycles (active trading)
+    "sleep_minutes": 5,           # Default: 5 minutes between cycles (active trading)
 
     # Mode settings
     "swarm_mode": "single",       # Default: single (options: single, swarm)
@@ -95,12 +95,11 @@ DEFAULT_SETTINGS = {
     # Token settings - Main trading tokens
     "monitored_tokens": ["BTC", "ETH", "SOL", "LTC", "AAVE", "AVAX", "HYPE"],
 
-    # Main AI Model settings - OpenRouter FREE model (best for trading)
-    # Uses official OpenRouter free models: https://openrouter.ai/collections/free-models
-    "ai_provider": "openrouter",                      # OpenRouter with FREE models
-    "ai_model": "nex-agi/deepseek-v3.1-nex-n1:free", # FREE - Best reasoning model
-    "ai_temperature": 0.5,                            # Balanced for trading decisions
-    "ai_max_tokens": 2048,                            # Sufficient for trading analysis
+    # Main AI Model settings - OpenRouter NVIDIA Nemotron Nano (best for trading)
+    "ai_provider": "openrouter",                      # OpenRouter with NVIDIA Nemotron
+    "ai_model": "nvidia/nemotron-nano-12b-v2-vl:free", # NVIDIA Nemotron Nano 12B VL - Multimodal
+    "ai_temperature": 0.6,                            # Optimized for trading decisions
+    "ai_max_tokens": 8024,                            # Sufficient for trading analysis
 
     # Alternative FREE models on OpenRouter:
     # "ai_model": "xiaomi/mimo-v2-flash:free",        # Ultra-fast
