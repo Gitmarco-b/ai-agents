@@ -159,6 +159,26 @@ function renderAccountSummary(state) {
 
     // Update Pulse Graph overlay with current account state
     updatePulseOverlay(state);
+    
+    // Update Pulse Graph header with current account state
+    updatePulseHeader(state);
+}
+
+// Update Pulse Graph header with Account Equity and P&L% (UI-only overlay)
+function updatePulseHeader(acct) {
+    const equityEl = document.getElementById('pulse-header-equity');
+    const pnlEl = document.getElementById('pulse-header-pnl');
+    if (!equityEl || !pnlEl || !acct) return;
+
+    if (typeof acct.equity === 'number') {
+        equityEl.textContent = `$${acct.equity.toFixed(2)}`;
+    }
+    if (typeof acct.pnlPct === 'number') {
+        const pct = acct.pnlPct;
+        pnlEl.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+        pnlEl.classList.toggle('positive', pct >= 0);
+        pnlEl.classList.toggle('negative', pct < 0);
+    }
 }
 
 // Update Pulse Graph overlay with Account Equity and P&L% (UI-only overlay)
