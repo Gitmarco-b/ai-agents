@@ -955,7 +955,7 @@ def save_agent_state(state):
 def should_stop_agent():
     """Check if agent should stop - used as callback for trading agent"""
     with state_lock:
-        return stop_agent_flag or not agent_running
+        return stop_agent_flag
 
 
 def run_trading_agent():

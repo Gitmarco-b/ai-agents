@@ -2602,13 +2602,14 @@ Return ONLY valid JSON with the following structure:
         cprint("=" * 60 + "\n", "cyan")
 
     def should_stop(self):
-        """Enhanced stop signal checking with TP/SL thresholds"""
+        """Enhanced stop signal checking - only check external stop signals"""
         if self.stop_check_callback is not None:
             if self.stop_check_callback():
                 return True
         
-        # Check for immediate TP/SL actions needed
-        return self._check_immediate_tp_sl_actions()
+        # DO NOT check TP/SL here - that's handled within the trading cycle logic
+        # TP/SL should trigger position closes, not stop the entire trading cycle
+        return False
 
     def _check_immediate_tp_sl_actions(self):
         """Check if any positions need immediate TP/SL execution"""
