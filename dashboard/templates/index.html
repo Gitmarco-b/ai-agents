@@ -37,6 +37,13 @@
             </div>
         </header>
 
+        <!-- Newsticker -->
+        <div class="newsticker">
+            <div class="newsticker-track">
+                Market updates will appear here
+            </div>
+        </div>
+
         <!-- Dropdown Menu -->
         <div id="dropdown-menu" class="dropdown-menu">
             <button class="menu-item" onclick="openTimezoneModal();toggleMenu();">
@@ -53,34 +60,10 @@
             </button>
         </div>
 
-        <!-- Account Summary -->
-        <div class="account-summary">
-            <div class="summary-item">
-                <span class="label">Equity</span>
-                <span class="value" id="equity">$0.00</span>
-                <span class="sublabel">Total</span>
-            </div>
-            <div class="summary-item">
-                <span class="label">Balance</span>
-                <span class="value" id="balance">$0.00</span>
-                <span class="sublabel">USDC</span>
-            </div>
-            <div class="summary-item">
-                <span class="label">P&L</span>
-                <span class="value pnl" id="pnl">$0.00</span>
-                <span class="sublabel" id="pnl-pct">0.00%</span>
-            </div>
-            <div class="summary-item">
-                <span class="label">Exchange</span>
-                <span class="value" id="exchange">HyperLiquid</span>
-                <span class="sublabel" id="status">Connected</span>
-            </div>
-        </div>
-
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Left Panel: Positions & Trades -->
-            <div class="panel">
+        <!-- Main Content (3-Column Layout) -->
+        <div class="main-content three-col">
+            <!-- Column 1: Left (30%) - Pulse Graph & Recent Trades -->
+            <div class="col left-col">
                 <!-- Portfolio Evolution -->
                 <div class="card">
                     <div class="card-header">
@@ -90,10 +73,22 @@
                     <div class="portfolio-chart" id="portfolio-chart">
                         <!-- Chart will be rendered here -->
                     </div>
+                </div>
+                
+                <!-- Recent Trades -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Recent Trades</h2>
+                        <span class="badge" id="trade-count">0</span>
+                    </div>
                     <div class="trades-container" id="trades">
                         <div class="empty-state"></div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Column 2: Middle (50%) - Open Positions & Agent Console -->
+            <div class="col mid-col">
                 <!-- Positions -->
                 <div class="card">
                     <div class="card-header">
@@ -111,11 +106,7 @@
                     </div>
                 </div>
 
-                
-            </div>
-
-            <!-- Right Panel: Console -->
-            <div class="console-panel">
+                <!-- Agent Console -->
                 <div class="card console-card">
                     <div class="card-header">
                         <h2>Agent Console</h2>
@@ -123,6 +114,34 @@
                     </div>
                     <div class="console-output" id="console">
                         <div class="console-line">🌐 Dashboard initialized...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Column 3: Right (20%) - Account Summary -->
+            <div class="col right-col">
+                <div class="card">
+                    <div class="account-summary stacked">
+                        <div class="summary-item">
+                            <span class="label">Equity</span>
+                            <span class="value large" id="equity">$0.00</span>
+                            <span class="sublabel">Total</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="label">Balance</span>
+                            <span class="value" id="balance">$0.00</span>
+                            <span class="sublabel">USDC</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="label">P&L</span>
+                            <span class="value pnl" id="pnl">$0.00</span>
+                            <span class="sublabel" id="pnl-pct">0.00%</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="label">Exchange</span>
+                            <span class="value" id="exchange">HyperLiquid</span>
+                            <span class="sublabel" id="status">Connected</span>
+                        </div>
                     </div>
                 </div>
             </div>

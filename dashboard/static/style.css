@@ -33,6 +33,9 @@
 
 html, body {
     height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
     background: var(--bg-primary);
     color: var(--text-primary);
     font-family: var(--font-primary);
@@ -48,6 +51,9 @@ html, body {
 
 /* Header with Controls */
 .header {
+    position: sticky;
+    top: 0;
+    z-index: 1100;
     background: var(--bg-secondary);
     border-bottom: 2px solid var(--border-color);
     padding: 18px 18px;
@@ -315,6 +321,13 @@ margin-left: -4px;
     padding: 18px 18px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
+}
+
+/* Stacked Account Summary (for column 3) */
+.account-summary.stacked {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 16px;
 }
 
 .summary-item {
@@ -999,6 +1012,45 @@ textarea.setting-input {
     min-height: 80px;
 }
 
+/* Newsticker */
+.newsticker {
+    height: 12px;
+    line-height: 12px;
+    font-size: 11px;
+    padding: 0 12px;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    overflow: hidden;
+}
+
+.newsticker-track {
+    white-space: nowrap;
+}
+
+/* 3-Column Layout */
+.main-content.three-col {
+    display: grid;
+    grid-template-columns: 30% 50% 20%;
+    gap: 12px;
+    padding: 18px;
+    align-items: start;
+}
+
+.main-content .col {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Account Summary - Emphasize Equity */
+.account-summary .value.large,
+#equity {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+}
+
 /* Portfolio Chart */
 .portfolio-chart {
     height: 200px;
@@ -1085,6 +1137,36 @@ textarea.setting-input {
 
 .menu-item:last-child:hover svg {
     stroke: var(--accent-red);
+}
+
+@media (max-width: 1000px) {
+    /* 3-column layout becomes single column on smaller screens */
+    .main-content.three-col {
+        grid-template-columns: 1fr;
+        padding: 12px;
+    }
+
+    /* Column stacking order */
+    .left-col { order: 1; }
+    .mid-col  { order: 2; }
+    .right-col { order: 3; }
+
+    /* Fix position row layout for mobile */
+    .position-row {
+        grid-template-columns: 1fr !important;
+        gap: 8px;
+    }
+
+    .position {
+        display: grid;
+        grid-template-columns: 1fr;
+        padding: 10px;
+    }
+
+    /* Account summary in right column becomes full width */
+    .right-col .card {
+        width: 100%;
+    }
 }
 
 @media (max-width: 768px) {
