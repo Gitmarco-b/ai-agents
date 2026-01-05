@@ -261,15 +261,6 @@ function updatePositions(positions) {
                 <div class="position-item">
                     <span class="position-label">Value</span>
                     <span class="position-value">$${pos.position_value ? pos.position_value.toFixed(2) : '0.00'}</span>
-                </div>
-                <div class="position-item">
-                    <span class="position-label">Entry Price</span>
-                    <span class="position-value">$${pos.entry_price.toFixed(2)}</span>
-                </div>
-                <div class="position-item">
-                    <span class="position-label">Mark Price</span>
-                    <span class="position-value">$${pos.mark_price ? pos.mark_price.toFixed(2) : pos.entry_price.toFixed(2)}</span>
-                </div>
                 <div class="position-item">
                     <span class="position-label">P&L</span>
                     <span class="position-value pnl ${pos.pnl_percent >= 0 ? 'positive' : 'negative'}">
@@ -279,6 +270,16 @@ function updatePositions(positions) {
                         </span>
                     </span>
                 </div>
+                </div>
+                <div class="position-item">
+                    <span class="position-label">Entry Price</span>
+                    <span class="position-value">$${pos.entry_price.toFixed(2)}</span>
+                </div>
+                <div class="position-item">
+                    <span class="position-label">Mark Price</span>
+                    <span class="position-value">$${pos.mark_price ? pos.mark_price.toFixed(2) : pos.entry_price.toFixed(2)}</span>
+                </div>
+                
             </div>
             <div class="position-actions-row">
                 <button class="btn-position-action btn-close-position" onclick="closePosition('${pos.symbol}')" title="Close Position">
