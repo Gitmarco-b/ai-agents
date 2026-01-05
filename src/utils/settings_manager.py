@@ -95,11 +95,18 @@ DEFAULT_SETTINGS = {
     # Token settings - Main trading tokens
     "monitored_tokens": ["BTC", "ETH", "SOL", "LTC", "AAVE", "AVAX", "HYPE"],
 
-    # Main AI Model settings - OpenRouter NVIDIA Nemotron Nano (best for trading)
+    # Main AI Model settings - OpenRouter NVIDIA Nemotron 3 Nano (best for trading)
     "ai_provider": "openrouter",                      # OpenRouter with NVIDIA Nemotron
-    "ai_model": "nvidia/nemotron-nano-12b-v2-vl:free", # NVIDIA Nemotron Nano 12B VL - Multimodal
+    "ai_model": "nvidia/nemotron-3-nano-30b-a3b:free", # NVIDIA Nemotron 3 Nano 30B - MoE agentic AI
     "ai_temperature": 0.6,                            # Optimized for trading decisions
     "ai_max_tokens": 8024,                            # Sufficient for trading analysis
+
+    # Trading Parameters
+    "leverage": 20,                                   # Leverage: 1-20x
+    "take_profit_percent": 5.0,                       # Take Profit %: 0.1-50%
+    "stop_loss_percent": 2.0,                         # Stop Loss %: 0.1-50%
+    "cash_buffer_percent": 10,                        # Cash Buffer %: 0-50%
+    "max_position_percent": 90,                       # Max Position %: 1-100%
 
     # Alternative FREE models on OpenRouter:
     # "ai_model": "xiaomi/mimo-v2-flash:free",        # Ultra-fast
@@ -361,6 +368,51 @@ def validate_ai_max_tokens(max_tokens):
         return False
 
 
+def validate_leverage(leverage):
+    """Validate leverage (1-20x)"""
+    try:
+        lev = int(leverage)
+        return 1 <= lev <= 20
+    except (ValueError, TypeError):
+        return False
+
+
+def validate_take_profit_percent(tp_percent):
+    """Validate take profit percentage (0.1-50%)"""
+    try:
+        tp = float(tp_percent)
+        return 0.1 <= tp <= 50.0
+    except (ValueError, TypeError):
+        return False
+
+
+def validate_stop_loss_percent(sl_percent):
+    """Validate stop loss percentage (0.1-50%)"""
+    try:
+        sl = float(sl_percent)
+        return 0.1 <= sl <= 50.0
+    except (ValueError, TypeError):
+        return False
+
+
+def validate_cash_buffer_percent(cash_percent):
+    """Validate cash buffer percentage (0-50%)"""
+    try:
+        cash = float(cash_percent)
+        return 0 <= cash <= 50.0
+    except (ValueError, TypeError):
+        return False
+
+
+def validate_max_position_percent(max_pos_percent):
+    """Validate max position percentage (1-100%)"""
+    try:
+        max_pos = float(max_pos_percent)
+        return 1 <= max_pos <= 100.0
+    except (ValueError, TypeError):
+        return False
+
+
 def get_hyperliquid_tokens():
     """Get all available Hyperliquid tokens organized by category"""
     return HYPERLIQUID_TOKENS
@@ -471,5 +523,21 @@ def validate_settings(settings):
         valid, error = validate_swarm_models(settings["swarm_models"])
         if not valid:
             errors.append(error)
+
+    # Validate trading parameters
+    if "leverage" in settings and not validate_leverage(settings["leverage"]):
+        errors.append("leverage must be between 1 and 20")
+
+    if "take_profit_percent" in settings and not validate_take_profit_percent(settings["take_profit_percent"]):
+        errors.append("take_profit_percent must be between 0.1 and 50.0")
+
+    if "stop_loss_percent" in settings and not validate_stop_loss_percent(settings["stop_loss_percent"]):
+        errors.append("stop_loss_percent must be between 0.1 and 50.0")
+
+    if "cash_buffer_percent" in settings and not validate_cash_buffer_percent(settings["cash_buffer_percent"]):
+        errors.append("cash_buffer_percent must be between 0 and 50.0")
+
+    if "max_position_percent" in settings and not validate_max_position_percent(settings["max_position_percent"]):
+        errors.append("max_position_percent must be between 1 and 100.0")
 
     return len(errors) == 0, errors

@@ -977,6 +977,13 @@ function applySettings(settings) {
 
     document.getElementById('main-max-tokens').value = settings.ai_max_tokens || 8024;
 
+    // Trading Parameters
+    document.getElementById('leverage-input').value = settings.leverage || 20;
+    document.getElementById('take-profit-input').value = settings.take_profit_percent || 5.0;
+    document.getElementById('stop-loss-input').value = settings.stop_loss_percent || 2.0;
+    document.getElementById('cash-buffer-input').value = settings.cash_buffer_percent || 10;
+    document.getElementById('max-position-input').value = settings.max_position_percent || 90;
+
     // Swarm models - Default to 4 FREE OpenRouter models for cost-effective consensus
     // Source: https://openrouter.ai/collections/free-models
     swarmModels = settings.swarm_models || [
@@ -1296,7 +1303,14 @@ async function saveSettings() {
         ai_max_tokens: maxTokens,
 
         // Swarm models
-        swarm_models: collectSwarmModels()
+        swarm_models: collectSwarmModels(),
+
+        // Trading Parameters
+        leverage: parseInt(document.getElementById('leverage-input').value),
+        take_profit_percent: parseFloat(document.getElementById('take-profit-input').value),
+        stop_loss_percent: parseFloat(document.getElementById('stop-loss-input').value),
+        cash_buffer_percent: parseFloat(document.getElementById('cash-buffer-input').value),
+        max_position_percent: parseFloat(document.getElementById('max-position-input').value)
     };
 
     try {
