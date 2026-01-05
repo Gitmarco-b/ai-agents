@@ -62,7 +62,7 @@
 
         <!-- Main Content (3-Column Layout) -->
         <div class="main-content three-col">
-            <!-- Column 1: Left (30%) - Pulse Graph & Recent Trades -->
+            <!-- Column 1: Left (30%) - Pulse Graph & Agent Console -->
             <div class="col left-col">
                     <!-- Portfolio Evolution -->
                     <div class="card">
@@ -79,20 +79,20 @@
                             <!-- Chart will be rendered here -->
                         </div>
                     </div>
-                
-                <!-- Recent Trades -->
-                <div class="card">
+
+                <!-- Agent Console -->
+                <div class="card console-card">
                     <div class="card-header">
-                        <h2>Recent Trades</h2>
-                        <span class="badge" id="trade-count">0</span>
+                        <h2>Agent Console</h2>
+                        <button class="btn-small" id="clear-console" onclick="clearConsole()">Clear</button>
                     </div>
-                    <div class="trades-container" id="trades">
-                        <div class="empty-state"></div>
+                    <div class="console-output" id="console">
+                        <div class="console-line">🌐 Dashboard initialized...</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Column 2: Middle (50%) - Open Positions & Agent Console -->
+            <!-- Column 2: Middle (50%) - Open Positions -->
             <div class="col mid-col">
                 <!-- Positions -->
                 <div class="card">
@@ -110,20 +110,9 @@
                         </button>
                     </div>
                 </div>
-
-                <!-- Agent Console -->
-                <div class="card console-card">
-                    <div class="card-header">
-                        <h2>Agent Console</h2>
-                        <button class="btn-small" id="clear-console" onclick="clearConsole()">Clear</button>
-                    </div>
-                    <div class="console-output" id="console">
-                        <div class="console-line">🌐 Dashboard initialized...</div>
-                    </div>
-                </div>
             </div>
 
-            <!-- Column 3: Right (20%) - Account Summary -->
+            <!-- Column 3: Right (20%) - Account Summary & Recent Trades -->
             <div class="col right-col">
                 <div class="card">
                     <div class="account-summary stacked">
@@ -147,6 +136,17 @@
                             <span class="value" id="exchange">HyperLiquid</span>
                             <span class="sublabel" id="status">Connected</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Recent Trades -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Recent Trades</h2>
+                        <span class="badge" id="trade-count">0</span>
+                    </div>
+                    <div class="trades-container" id="trades">
+                        <div class="empty-state"></div>
                     </div>
                 </div>
             </div>

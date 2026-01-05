@@ -1244,10 +1244,10 @@ textarea.setting-input {
         padding: 12px;
     }
 
-    /* Column stacking order */
-    .left-col { order: 1; }
-    .mid-col  { order: 2; }
-    .right-col { order: 3; }
+    /* Column stacking order for mobile: Pulse Graph, Open Positions, Account Summary, Agent Console */
+    .left-col { order: 1; }     /* Pulse Graph & Agent Console */
+    .mid-col  { order: 2; }     /* Open Positions */
+    .right-col { order: 3; }    /* Account Summary & Recent Trades */
 
     /* Fix position row layout for mobile */
     .position-row {
@@ -1348,7 +1348,7 @@ textarea.setting-input {
         font-size: 18px;
     }
 
-    /* MAIN CONTENT: Reorder panels */
+    /* MAIN CONTENT: Reorder panels for mobile layout */
     .main-content {
         display: flex;
         flex-direction: column;
@@ -1356,14 +1356,18 @@ textarea.setting-input {
         gap: 15px;
     }
 
-    /* Positions first */
-    .panel {
-        order: 1;
+    /* Mobile layout order: Pulse Graph, Open Positions, Account Summary, Agent Console */
+    .left-col { order: 1; }     /* Pulse Graph & Agent Console */
+    .mid-col  { order: 2; }     /* Open Positions */
+    .right-col { order: 3; }    /* Account Summary & Recent Trades */
+
+    /* Within left-col: Pulse Graph first, Agent Console second */
+    .left-col .card:first-child {
+        order: 1; /* Pulse Graph */
     }
 
-    /* Console second */
-    .console-panel {
-        order: 2;
+    .left-col .console-card {
+        order: 2; /* Agent Console */
     }
 
     /* Compact position cards */
