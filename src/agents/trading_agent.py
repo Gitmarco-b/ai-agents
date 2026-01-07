@@ -98,8 +98,8 @@ try:
     CLOSE_VALIDATOR_AVAILABLE = True
 except ImportError:
     CLOSE_VALIDATOR_AVAILABLE = False
-    STOP_LOSS_THRESHOLD = -1.5
-    TAKE_PROFIT_THRESHOLD = 4.5
+    STOP_LOSS_THRESHOLD = -2.0
+    TAKE_PROFIT_THRESHOLD = 6.0
     PROFIT_TARGET_THRESHOLD = 0.5
     MIN_CONFIDENCE_TO_CLOSE = 80
 
@@ -420,12 +420,13 @@ AI TRADING SIGNALS:
 {signals}
 
 ACCOUNT INFO:
-- Available Balance: ${available_balance:.2f}
+- Available Balance: ${available_balance:.2f} (free to allocate)
 - Leverage: {leverage}x
 - Max Position %: {max_position_pct}%
 - Cash Buffer: {cash_buffer_pct}%
 - Minimum Order: ${min_order:.2f} notional
 - Trading Cycle: Every {cycle_minutes} minutes (MINIMUM HOLD TIME)
+- Total Equity: ${total_equity:.2f} (includes positions)
 
 YOUR TASK:
 Analyze the current positions and AI signals to create an OPTIMAL allocation plan.
