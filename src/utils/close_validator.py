@@ -20,7 +20,7 @@ from enum import Enum
 # ============================================================================
 
 # Stop Loss Threshold (Tier 0)
-STOP_LOSS_THRESHOLD = 1.5  # Force close at -1.5% or worse
+STOP_LOSS_THRESHOLD = -1.5  # Force close at -1.5% or worse
 
 # Take Profit Threshold (Tier 0) - FORCE CLOSE like stop loss
 TAKE_PROFIT_THRESHOLD = 4.5  # Force close at +4.5% or better
