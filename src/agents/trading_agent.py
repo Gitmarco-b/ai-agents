@@ -635,6 +635,34 @@ class TradingAgent:
                 cprint(f"❌ Error loading key: {e}", "red")
                 sys.exit(1)
 
+        # ============================================================================
+        # 🟢 WEBSOCKET INITIALIZATION (CRITICAL FOR REAL-TIME DATA)
+        # ============================================================================
+        if EXCHANGE == "HYPERLIQUID":
+            try:
+                from src.websocket import start_websocket_feeds, is_websocket_enabled
+
+                # Ensure account address is available for UserStateFeed subscription
+                if self.address and not os.getenv("ACCOUNT_ADDRESS"):
+                    os.environ["ACCOUNT_ADDRESS"] = self.address
+
+                cprint("\n🌐 Starting WebSocket data feeds...", "cyan")
+
+                # Start WebSocket feeds for monitored symbols
+                # This automatically starts price feeds, orderbook, and user state feeds
+                success = start_websocket_feeds(coins=self.symbols)
+
+                if success and is_websocket_enabled():
+                    cprint("🟢 WebSocket feeds started successfully!", "green")
+                    cprint(f"   📍 User account: {self.address[:8]}...", "cyan")
+                    cprint(f"   💰 Monitoring {len(self.symbols)} symbols for real-time updates", "cyan")
+                else:
+                    cprint("🟡 WebSocket feeds not fully available — using REST fallback", "yellow")
+
+            except Exception as e:
+                cprint(f"⚠️ WebSocket initialization failed: {e}", "yellow")
+                cprint("   Continuing with REST API fallback...", "yellow")
+
         # Check if using swarm mode or single model
         if self.use_swarm_mode:
             # Convert user's swarm_models format to SwarmAgent's format
